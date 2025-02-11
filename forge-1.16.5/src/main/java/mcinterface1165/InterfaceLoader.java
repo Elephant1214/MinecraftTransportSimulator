@@ -1,5 +1,6 @@
 package mcinterface1165;
 
+import minecrafttransportsimulator.MtsVersion;
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
 import minecrafttransportsimulator.blocks.instances.BlockCollision;
@@ -46,7 +47,6 @@ import java.util.Map.Entry;
 public class InterfaceLoader {
     public static final String MODID = "mts";
     public static final String MODNAME = "Immersive Vehicles (MTS)";
-    public static final String MODVER = "${version}";
 
     public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
     private final String gameDirectory;
@@ -82,7 +82,7 @@ public class InterfaceLoader {
             new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
         }
 
-        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MODVER);
+        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MtsVersion.VERSION);
 
         //Parse packs
         ConfigSystem.loadFromDisk(new File(gameDirectory, "config"), isClient);

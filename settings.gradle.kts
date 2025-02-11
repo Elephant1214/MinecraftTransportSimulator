@@ -16,4 +16,4 @@ pluginManagement {
 
 rootProject.name = "Immersive Vehicles"
 
-include("core", "forge-1.12.2", "forge-1.16.5")
+include("core", "forge-1.12.2", "forge-1.16.5", "forge-1.18.2")

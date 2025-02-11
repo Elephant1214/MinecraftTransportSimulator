@@ -1,12 +1,6 @@
 package mcinterface1122;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import minecrafttransportsimulator.MtsVersion;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackParser;
 import minecrafttransportsimulator.systems.ConfigSystem;
@@ -17,6 +11,12 @@ import net.minecraftforge.fml.common.Mod.EventHandler;
 import net.minecraftforge.fml.common.event.FMLConstructionEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Loader interface for the mod.  This class is not actually an interface, unlike everything else.
@@ -26,14 +26,13 @@ import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
  *
  * @author don_bruce
  */
-@Mod(modid = InterfaceLoader.MODID, name = InterfaceLoader.MODNAME, version = InterfaceLoader.MODVER)
+@Mod(modid = InterfaceLoader.MODID, name = InterfaceLoader.MODNAME, version = MtsVersion.VERSION)
 public final class InterfaceLoader {
     public static final String MODID = "mts";
     public static final String MODNAME = "Immersive Vehicles (MTS)";
-    public static final String MODVER = "${version}";
-	public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
-	
-	@EventHandler
+    public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
+
+    @EventHandler
     public void modConstruction(FMLConstructionEvent event) {
         //Enable universal bucket so that we can use buckets on fuel pumps.
         FluidRegistry.enableUniversalBucket();
@@ -50,8 +49,8 @@ public final class InterfaceLoader {
         } else {
             new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
         }
-	    
-	LOGGER.info("Welcome to MTS VERSION:" + MODVER);
+
+        LOGGER.info("Welcome to MTS VERSION:" + MtsVersion.VERSION);
 
         //Parse packs
         ConfigSystem.loadFromDisk(new File(gameDirectory, "config"), event.getSide().isClient());
