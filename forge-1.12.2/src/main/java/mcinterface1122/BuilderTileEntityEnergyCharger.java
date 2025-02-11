@@ -1,7 +1,5 @@
 package mcinterface1122;
 
-import javax.annotation.Nullable;
-
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityEnergyCharger;
 import minecrafttransportsimulator.systems.ConfigSystem;
@@ -9,6 +7,8 @@ import net.minecraft.util.EnumFacing;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
+
+import javax.annotation.Nullable;
 
 /**
  * Builder for tile entities that transform MC energy into power for other entities.

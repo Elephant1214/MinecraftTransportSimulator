@@ -1,9 +1,11 @@
 package mcinterface1165.mixin.common;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Stream;
-
+import mcinterface1165.BuilderEntityExisting;
+import mcinterface1165.BuilderEntityLinkedSeat;
+import mcinterface1165.WrapperWorld;
+import minecrafttransportsimulator.baseclasses.BoundingBox;
+import net.minecraft.entity.Entity;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
@@ -15,12 +17,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import mcinterface1165.BuilderEntityExisting;
-import mcinterface1165.BuilderEntityLinkedSeat;
-import mcinterface1165.WrapperWorld;
-import minecrafttransportsimulator.baseclasses.BoundingBox;
-import net.minecraft.entity.Entity;
-import net.minecraft.util.math.Box;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 @Mixin(Entity.class)
 public abstract class EntityMixin {
@@ -37,7 +36,7 @@ public abstract class EntityMixin {
         Entity riding = entity.getVehicle();
         if (riding instanceof BuilderEntityLinkedSeat) {
             BuilderEntityLinkedSeat builder = (BuilderEntityLinkedSeat) riding;
-            if(builder.entity != null) {
+            if (builder.entity != null) {
                 ci.setReturnValue(new Vec3d(builder.entity.riderHeadPosition.x, builder.entity.riderHeadPosition.y, builder.entity.riderHeadPosition.z));
             }
         }

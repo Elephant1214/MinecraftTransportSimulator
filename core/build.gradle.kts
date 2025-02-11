@@ -12,13 +12,13 @@ dependencies {
 }
 
 tasks {
-    // This mess is what automatically updates the mod version in MtsVersion.java
+    // This mess is what automatically updates the mod version in MtsInfo.java
     compileJava {
-        // Take the main source directory, find MtsVersion
+        // Take the main source directory, find MtsInfo
         val versionFile = project.sourceSets.main.get().java.srcDirs.first()
             .walk()
             .filter {
-                it.nameWithoutExtension == "MtsVersion"
+                it.nameWithoutExtension == "MtsInfo"
             }.first()
         
         // Read the file and setup Regex for the field

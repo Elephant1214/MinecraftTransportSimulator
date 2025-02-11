@@ -1,16 +1,10 @@
 package mcinterface1122;
 
-import java.io.IOException;
-
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
-
 import io.netty.buffer.ByteBuf;
-import minecrafttransportsimulator.mcinterface.AWrapperWorld;
-import minecrafttransportsimulator.mcinterface.IInterfacePacket;
-import minecrafttransportsimulator.mcinterface.IWrapperNBT;
-import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.MtsInfo;
+import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.components.APacketBase;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.network.PacketBuffer;
@@ -22,8 +16,10 @@ import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import net.minecraftforge.fml.relauncher.Side;
 
+import java.io.IOException;
+
 class InterfacePacket implements IInterfacePacket {
-    private static final SimpleNetworkWrapper network = NetworkRegistry.INSTANCE.newSimpleChannel(InterfaceLoader.MODID);
+    private static final SimpleNetworkWrapper network = NetworkRegistry.INSTANCE.newSimpleChannel(MtsInfo.MOD_ID);
     private static final BiMap<Byte, Class<? extends APacketBase>> packetMappings = HashBiMap.create();
 
     /**
@@ -40,6 +36,14 @@ class InterfacePacket implements IInterfacePacket {
         InterfaceManager.packetInterface.registerPacket(packetIndex++, PacketEntityCSHandshakeClient.class);
         InterfaceManager.packetInterface.registerPacket(packetIndex++, PacketEntityCSHandshakeServer.class);
         APacketBase.initPackets(packetIndex);
+    }
+
+    /**
+     * Gets the world this packet was sent from based on its context.
+     * Used for handling packets arriving on the server.
+     */
+    private static AWrapperWorld getServerWorld(MessageContext ctx) {
+        return WrapperWorld.getWrapperFor(ctx.getServerHandler().player.world);
     }
 
     @Override
@@ -65,14 +69,6 @@ class InterfacePacket implements IInterfacePacket {
     @Override
     public void sendToPlayer(APacketBase packet, IWrapperPlayer player) {
         network.sendTo(new WrapperPacket(packet), (EntityPlayerMP) ((WrapperPlayer) player).player);
-    }
-
-    /**
-     * Gets the world this packet was sent from based on its context.
-     * Used for handling packets arriving on the server.
-     */
-    private static AWrapperWorld getServerWorld(MessageContext ctx) {
-        return WrapperWorld.getWrapperFor(ctx.getServerHandler().player.world);
     }
 
     @Override

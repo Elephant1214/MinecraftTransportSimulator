@@ -3,6 +3,7 @@ package mcinterface1165;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import io.netty.buffer.ByteBuf;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.components.APacketBase;
 import net.minecraft.network.PacketByteBuf;
@@ -18,7 +19,7 @@ import java.util.function.Supplier;
 
 class InterfacePacket implements IInterfacePacket {
     private static final String PROTOCOL_VERSION = "1";
-    private static final SimpleChannel network = NetworkRegistry.newSimpleChannel(new Identifier(InterfaceLoader.MODID, "main"), () -> PROTOCOL_VERSION, PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals);
+    private static final SimpleChannel network = NetworkRegistry.newSimpleChannel(new Identifier(MtsInfo.MOD_ID, "main"), () -> PROTOCOL_VERSION, PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals);
     private static final BiMap<Byte, Class<? extends APacketBase>> packetMappings = HashBiMap.create();
 
     /**
@@ -34,6 +35,14 @@ class InterfacePacket implements IInterfacePacket {
         InterfaceManager.packetInterface.registerPacket(packetIndex++, PacketEntityCSHandshakeClient.class);
         InterfaceManager.packetInterface.registerPacket(packetIndex++, PacketEntityCSHandshakeServer.class);
         APacketBase.initPackets(packetIndex);
+    }
+
+    /**
+     * Gets the world this packet was sent from based on its context.
+     * Used for handling packets arriving on the server.
+     */
+    private static AWrapperWorld getServerWorld(Supplier<Context> ctx) {
+        return WrapperWorld.getWrapperFor(ctx.get().getSender().world);
     }
 
     @Override
@@ -59,14 +68,6 @@ class InterfacePacket implements IInterfacePacket {
     @Override
     public void sendToPlayer(APacketBase packet, IWrapperPlayer player) {
         network.send(PacketDistributor.PLAYER.with(() -> (ServerPlayerEntity) ((WrapperPlayer) player).player), new WrapperPacket(packet));
-    }
-
-    /**
-     * Gets the world this packet was sent from based on its context.
-     * Used for handling packets arriving on the server.
-     */
-    private static AWrapperWorld getServerWorld(Supplier<Context> ctx) {
-        return WrapperWorld.getWrapperFor(ctx.get().getSender().world);
     }
 
     @Override

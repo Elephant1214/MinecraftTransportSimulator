@@ -1,10 +1,5 @@
 package mcinterface1122;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.guis.components.AGUIBase;
 import minecrafttransportsimulator.guis.instances.GUIPackMissing;
@@ -36,13 +31,117 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.fml.relauncher.Side;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @EventBusSubscriber(Side.CLIENT)
 public class InterfaceClient implements IInterfaceClient {
+    private static final Point3D mutablePosition = new Point3D();
     private static CameraMode actualCameraMode;
     private static CameraMode cameraModeRequest;
     private static int ticksToCullingWarning = 200;
     private static BuilderEntityRenderForwarder activeFollower;
     private static int ticksSincePlayerJoin;
+
+    /**
+     * Tick client-side entities like bullets and particles.
+     * These don't get ticked normally due to the world tick event
+     * not being called on clients.
+     */
+    @SubscribeEvent
+    public static void onIVClientTick(TickEvent.ClientTickEvent event) {
+        IWrapperPlayer player = InterfaceManager.clientInterface.getClientPlayer();
+        if (!InterfaceManager.clientInterface.isGamePaused() && player != null) {
+            WrapperWorld world = WrapperWorld.getWrapperFor(Minecraft.getMinecraft().world);
+            if (world != null) {
+                if (event.phase.equals(Phase.START)) {
+                    if (!player.isSpectator()) {
+                        //Handle controls.  This has to happen prior to vehicle updates to ensure click handling is based on current position of the player.
+                        ControlSystem.controlGlobal(player);
+                        if (((WrapperPlayer) player).player.ticksExisted % 100 == 0) {
+                            if (!InterfaceManager.clientInterface.isGUIOpen() && !PackParser.arePacksPresent()) {
+                                new GUIPackMissing();
+                            }
+                        }
+                    }
+
+                    world.tickAll(true);
+
+                    //Complain about compats at 10 second mark.
+                    if (ConfigSystem.settings.general.performModCompatFunctions.value) {
+                        if (ticksToCullingWarning > 0) {
+                            if (--ticksToCullingWarning == 0) {
+                                //Nothing to complain about here!
+                            }
+                        }
+                    }
+
+                    //Check follower.
+                    if (activeFollower != null) {
+                        //Follower exists, check if world is the same and it is actually updating.
+                        //We check basic states, and then the watchdog bit that gets reset every tick.
+                        //This way if we're in the world, but not valid we will know.
+                        EntityPlayer mcPlayer = ((WrapperPlayer) player).player;
+                        if (activeFollower.world != mcPlayer.world || activeFollower.playerFollowing != mcPlayer || mcPlayer.isDead || activeFollower.isDead || activeFollower.idleTickCounter == 20) {
+                            //Follower is not linked.  Remove it and re-create in code below.
+                            activeFollower.setDead();
+                            activeFollower = null;
+                            ticksSincePlayerJoin = 0;
+                        } else {
+                            ++activeFollower.idleTickCounter;
+                        }
+                    } else {
+                        //Follower does not exist, check if player has been present for 3 seconds and spawn it.
+                        if (++ticksSincePlayerJoin == 60) {
+                            activeFollower = new BuilderEntityRenderForwarder(((WrapperPlayer) player).player);
+                            activeFollower.loadedFromSavedNBT = true;
+                            world.world.spawnEntity(activeFollower);
+                        }
+                    }
+                } else {
+                    world.tickAll(false);
+
+                    //Handle camera requests.
+                    if (cameraModeRequest != null) {
+                        switch (cameraModeRequest) {
+                            case FIRST_PERSON: {
+                                Minecraft.getMinecraft().gameSettings.thirdPersonView = 0;
+                                break;
+                            }
+                            case THIRD_PERSON: {
+                                Minecraft.getMinecraft().gameSettings.thirdPersonView = 1;
+                                break;
+                            }
+                            case THIRD_PERSON_INVERTED: {
+                                Minecraft.getMinecraft().gameSettings.thirdPersonView = 2;
+                                break;
+                            }
+                        }
+                        cameraModeRequest = null;
+                    }
+
+                    //Update camera state, since this can change depending on tick if we check during renders.
+                    int cameraModeInt = Minecraft.getMinecraft().gameSettings.thirdPersonView;
+                    switch (cameraModeInt) {
+                        case (0): {
+                            actualCameraMode = CameraMode.FIRST_PERSON;
+                            break;
+                        }
+                        case (1): {
+                            actualCameraMode = CameraMode.THIRD_PERSON;
+                            break;
+                        }
+                        case (2): {
+                            actualCameraMode = CameraMode.THIRD_PERSON_INVERTED;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     @Override
     public boolean isGamePaused() {
@@ -156,8 +255,6 @@ public class InterfaceClient implements IInterfaceClient {
         return mutablePosition;
     }
 
-    private static final Point3D mutablePosition = new Point3D();
-
     @Override
     public void playBlockBreakSound(Point3D position) {
         BlockPos pos = new BlockPos(position.x, position.y, position.z);
@@ -175,103 +272,5 @@ public class InterfaceClient implements IInterfaceClient {
             tooltipText.set(i, TextFormatting.GRAY + tooltipText.get(i));
         }
         return tooltipText;
-    }
-
-    /**
-     * Tick client-side entities like bullets and particles.
-     * These don't get ticked normally due to the world tick event
-     * not being called on clients.
-     */
-    @SubscribeEvent
-    public static void onIVClientTick(TickEvent.ClientTickEvent event) {
-        IWrapperPlayer player = InterfaceManager.clientInterface.getClientPlayer();
-        if (!InterfaceManager.clientInterface.isGamePaused() && player != null) {
-            WrapperWorld world = WrapperWorld.getWrapperFor(Minecraft.getMinecraft().world);
-            if (world != null) {
-                if (event.phase.equals(Phase.START)) {
-                    if (!player.isSpectator()) {
-                        //Handle controls.  This has to happen prior to vehicle updates to ensure click handling is based on current position of the player.
-                        ControlSystem.controlGlobal(player);
-                        if (((WrapperPlayer) player).player.ticksExisted % 100 == 0) {
-                            if (!InterfaceManager.clientInterface.isGUIOpen() && !PackParser.arePacksPresent()) {
-                                new GUIPackMissing();
-                            }
-                        }
-                    }
-
-                    world.tickAll(true);
-
-                    //Complain about compats at 10 second mark.
-                    if (ConfigSystem.settings.general.performModCompatFunctions.value) {
-                        if (ticksToCullingWarning > 0) {
-                            if (--ticksToCullingWarning == 0) {
-                                //Nothing to complain about here!
-                            }
-                        }
-                    }
-
-                    //Check follower.
-                    if (activeFollower != null) {
-                        //Follower exists, check if world is the same and it is actually updating.
-                        //We check basic states, and then the watchdog bit that gets reset every tick.
-                        //This way if we're in the world, but not valid we will know.
-                        EntityPlayer mcPlayer = ((WrapperPlayer) player).player;
-                        if (activeFollower.world != mcPlayer.world || activeFollower.playerFollowing != mcPlayer || mcPlayer.isDead || activeFollower.isDead || activeFollower.idleTickCounter == 20) {
-                            //Follower is not linked.  Remove it and re-create in code below.
-                            activeFollower.setDead();
-                            activeFollower = null;
-                            ticksSincePlayerJoin = 0;
-                        } else {
-                            ++activeFollower.idleTickCounter;
-                        }
-                    } else {
-                        //Follower does not exist, check if player has been present for 3 seconds and spawn it.
-                        if (++ticksSincePlayerJoin == 60) {
-                            activeFollower = new BuilderEntityRenderForwarder(((WrapperPlayer) player).player);
-                            activeFollower.loadedFromSavedNBT = true;
-                            world.world.spawnEntity(activeFollower);
-                        }
-                    }
-                } else {
-                    world.tickAll(false);
-                    
-                    //Handle camera requests.
-                    if(cameraModeRequest != null) {
-                    	switch(cameraModeRequest) {
-	                    	case FIRST_PERSON:{
-	                    		Minecraft.getMinecraft().gameSettings.thirdPersonView = 0;
-	                    		break;
-	                    	}
-	                    	case THIRD_PERSON:{
-	                    		Minecraft.getMinecraft().gameSettings.thirdPersonView = 1;
-	                    		break;
-	                    	}
-	                    	case THIRD_PERSON_INVERTED:{
-	                    		Minecraft.getMinecraft().gameSettings.thirdPersonView = 2;
-	                    		break;
-	                    	}
-                    	}
-                    	cameraModeRequest = null;
-                    }
-
-                    //Update camera state, since this can change depending on tick if we check during renders.
-                    int cameraModeInt = Minecraft.getMinecraft().gameSettings.thirdPersonView;
-                    switch(cameraModeInt) {
-                    	case(0):{
-                    		actualCameraMode = CameraMode.FIRST_PERSON;
-                    		break;
-                    	}
-                    	case(1):{
-                    		actualCameraMode = CameraMode.THIRD_PERSON;
-                    		break;
-                    	}
-                    	case(2):{
-                    		actualCameraMode = CameraMode.THIRD_PERSON_INVERTED;
-                    		break;
-                    	}
-                    }
-                }
-            }
-        }
     }
 }

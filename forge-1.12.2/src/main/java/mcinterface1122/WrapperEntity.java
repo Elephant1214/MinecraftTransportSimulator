@@ -1,9 +1,5 @@
 package mcinterface1122;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.Damage;
 import minecrafttransportsimulator.baseclasses.Point3D;
@@ -36,13 +32,31 @@ import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 @EventBusSubscriber
 public class WrapperEntity implements IWrapperEntity {
     private static final Map<Entity, WrapperEntity> entityClientWrappers = new HashMap<>();
     private static final Map<Entity, WrapperEntity> entityServerWrappers = new HashMap<>();
 
     protected final Entity entity;
+    private final Point3D mutablePosition = new Point3D();
+    private final Point3D mutableVelocity = new Point3D();
+    private final RotationMatrix mutableOrientation = new RotationMatrix();
+    private final Point3D mutableSight = new Point3D();
+    private final BoundingBox mutableBounds = new BoundingBox(new Point3D(), 0, 0, 0);
     private AEntityB_Existing cachedEntityRiding;
+    private float lastPitchChecked;
+    private float lastYawChecked;
+    private float lastYawApplied;
+    private float lastPitch;
+    private float lastYaw;
+
+    protected WrapperEntity(Entity entity) {
+        this.entity = entity;
+    }
 
     /**
      * Returns a wrapper instance for the passed-in entity instance.
@@ -66,8 +80,16 @@ public class WrapperEntity implements IWrapperEntity {
         }
     }
 
-    protected WrapperEntity(Entity entity) {
-        this.entity = entity;
+    /**
+     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
+     */
+    @SubscribeEvent
+    public static void onIVWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld().isRemote) {
+            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        } else {
+            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        }
     }
 
     @Override
@@ -199,8 +221,6 @@ public class WrapperEntity implements IWrapperEntity {
         return mutablePosition;
     }
 
-    private final Point3D mutablePosition = new Point3D();
-
     @Override
     public Point3D getEyePosition() {
         AEntityB_Existing riding = getEntityRiding();
@@ -239,8 +259,6 @@ public class WrapperEntity implements IWrapperEntity {
         return mutableVelocity;
     }
 
-    private final Point3D mutableVelocity = new Point3D();
-
     @Override
     public void setVelocity(Point3D motion) {
         entity.motionX = motion.x;
@@ -258,11 +276,6 @@ public class WrapperEntity implements IWrapperEntity {
         }
         return mutableOrientation;
     }
-
-    private final RotationMatrix mutableOrientation = new RotationMatrix();
-    private float lastPitchChecked;
-    private float lastYawChecked;
-    private float lastYawApplied;
 
     @Override
     public void setOrientation(RotationMatrix rotation) {
@@ -290,17 +303,25 @@ public class WrapperEntity implements IWrapperEntity {
     }
 
     @Override
+    public void setPitch(double pitch) {
+        entity.rotationPitch = (float) pitch;
+    }
+
+    @Override
     public float getPitchDelta() {
         float value = entity.rotationPitch - lastPitch;
         lastPitch = entity.rotationPitch;
         return value;
     }
 
-    private float lastPitch;
-
     @Override
     public float getYaw() {
         return -entity.rotationYaw;
+    }
+
+    @Override
+    public void setYaw(double yaw) {
+        entity.rotationYaw = (float) -yaw;
     }
 
     @Override
@@ -310,24 +331,9 @@ public class WrapperEntity implements IWrapperEntity {
         return -value;
     }
 
-    private float lastYaw;
-
     @Override
     public float getBodyYaw() {
         return entity instanceof EntityLivingBase ? -((EntityLivingBase) entity).renderYawOffset : 0;
-    }
-
-    @Override
-    public Point3D getLineOfSight(double distance) {
-        mutableSight.set(0, 0, distance).rotate(getOrientation());
-        return mutableSight;
-    }
-
-    private final Point3D mutableSight = new Point3D();
-
-    @Override
-    public void setYaw(double yaw) {
-        entity.rotationYaw = (float) -yaw;
     }
 
     @Override
@@ -338,8 +344,9 @@ public class WrapperEntity implements IWrapperEntity {
     }
 
     @Override
-    public void setPitch(double pitch) {
-        entity.rotationPitch = (float) pitch;
+    public Point3D getLineOfSight(double distance) {
+        mutableSight.set(0, 0, distance).rotate(getOrientation());
+        return mutableSight;
     }
 
     @Override
@@ -350,8 +357,6 @@ public class WrapperEntity implements IWrapperEntity {
         mutableBounds.globalCenter.set(entity.posX, entity.posY + mutableBounds.heightRadius, entity.posZ);
         return mutableBounds;
     }
-
-    private final BoundingBox mutableBounds = new BoundingBox(new Point3D(), 0, 0, 0);
 
     @Override
     public IWrapperNBT getData() {
@@ -451,18 +456,6 @@ public class WrapperEntity implements IWrapperEntity {
             } else {
                 throw new NullPointerException("Potion " + effect.name + " does not exist.");
             }
-        }
-    }
-
-    /**
-     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
-     */
-    @SubscribeEvent
-    public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isRemote) {
-            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        } else {
-            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         }
     }
 }

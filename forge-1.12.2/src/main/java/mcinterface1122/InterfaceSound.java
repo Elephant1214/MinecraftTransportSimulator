@@ -1,20 +1,5 @@
 package mcinterface1122;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.lwjgl.BufferUtils;
-import org.lwjgl.openal.AL;
-import org.lwjgl.openal.AL10;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.entities.instances.EntityRadio;
 import minecrafttransportsimulator.mcinterface.IInterfaceSound;
@@ -32,6 +17,14 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.fml.relauncher.Side;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.openal.AL;
+import org.lwjgl.openal.AL10;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.util.*;
 
 /**
  * Interface for the sound system.  This is responsible for playing sound from vehicles/interactions.
@@ -42,36 +35,30 @@ import net.minecraftforge.fml.relauncher.Side;
 @EventBusSubscriber(Side.CLIENT)
 public class InterfaceSound implements IInterfaceSound {
     /**
-     * Flag for game paused state.  Gets set when the game is paused.
-     **/
-    private static boolean isSystemPaused;
-
-    /**
      * Map of String-based file-names to Integer pointers to buffer locations.  Used for loading sounds into
      * memory to prevent the need to load them every time they are played.
      **/
     private static final Map<String, Integer> dataSourceBuffers = new HashMap<>();
-
     /**
      * List of sounds currently playing.  Queued for updates every tick.
      **/
     private static final Set<SoundInstance> playingSounds = new HashSet<>();
-
     /**
      * List of playing {@link RadioStation} objects.
      **/
     private static final List<RadioStation> playingStations = new ArrayList<>();
-
     /**
      * List of sounds to start playing next update.  Split from playing sounds to avoid CMEs and odd states.
      **/
     private static final List<SoundInstance> queuedSounds = new ArrayList<>();
-
     /**
      * List of radios paused.  Needs to be separate from normal paused sound this those get re-added to the sound set.
      **/
     private static final List<SoundInstance> pausedRadioSounds = new ArrayList<>();
-
+    /**
+     * Flag for game paused state.  Gets set when the game is paused.
+     **/
+    private static boolean isSystemPaused;
     /**
      * This gets incremented whenever we try to get a source and fail.  If we get to 10, the sound system
      * will stop attempting to play sounds.  Used for when mods take all the sources.
@@ -225,6 +212,88 @@ public class InterfaceSound implements IInterfaceSound {
         }
     }
 
+    /**
+     * Loads an OGG file in its entirety using the {@link InterfaceOGGDecoder}.
+     * The sound is then stored in a dataBuffer keyed by soundName located in {@link #dataSourceBuffers}.
+     * The pointer to the dataBuffer is returned for convenience as it allows for transparent sound caching.
+     * If a sound with the same name is passed-in at a later time, it is assumed to be the same and rather
+     * than re-parse the sound the system will simply return the same pointer index to be bound.
+     */
+    private static Integer loadOGGJarSound(String soundName) {
+        if (dataSourceBuffers.containsKey(soundName)) {
+            //Already parsed the data.  Return the buffer.
+            return dataSourceBuffers.get(soundName);
+        } else {
+            //Need to parse the data.  Do so now.
+            String soundDomain = soundName.substring(0, soundName.indexOf(':'));
+            String soundPath = soundName.substring(soundDomain.length() + 1);
+            InputStream soundStream = InterfaceManager.coreInterface.getPackResource("/assets/" + soundDomain + "/sounds/" + soundPath + ".ogg");
+            if (soundStream != null) {
+                //Create decoder and decode whole file.
+                OGGDecoder decoder = new OGGDecoder(soundStream);
+                ByteBuffer decodedData = ByteBuffer.allocateDirect(0);
+                ByteBuffer blockRead;
+                while ((blockRead = decoder.readBlock()) != null) {
+                    decodedData = ByteBuffer.allocateDirect(decodedData.capacity() + blockRead.limit()).put(decodedData).put(blockRead);
+                    decodedData.rewind();
+                }
+
+                //Generate an IntBuffer to store a pointer to the data buffer.
+                IntBuffer dataBufferPointers = BufferUtils.createIntBuffer(1);
+                AL10.alGenBuffers(dataBufferPointers);
+
+                //Bind the decoder output buffer to the data buffer pointer.
+                AL10.alBufferData(dataBufferPointers.get(0), AL10.AL_FORMAT_MONO16, decodedData, decoder.getSampleRate());
+
+                //Done parsing.  Map the dataBuffer(s) to the soundName and return the index.
+                dataSourceBuffers.put(soundName, dataBufferPointers.get(0));
+                return dataSourceBuffers.get(soundName);
+            } else {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Update all sounds every client tick.
+     */
+    @SubscribeEvent
+    public static void onIVWorldTick(TickEvent.ClientTickEvent event) {
+        //Only do updates at the end of a phase to prevent double-updates.
+        if (event.phase.equals(Phase.END)) {
+            //We put this into a try block as sound system reloads can cause the thread to get stopped mid-execution.
+            try {
+                update();
+            } catch (Exception e) {
+                e.printStackTrace();
+                //Do nothing.  We only get exceptions here if OpenAL isn't ready.
+            }
+        }
+    }
+
+    /**
+     * Stop all sounds when the world is unloaded.
+     */
+    @SubscribeEvent
+    public static void onIVWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld().isRemote) {
+            queuedSounds.removeIf(soundInstance -> event.getWorld() == ((WrapperWorld) soundInstance.entity.world).world);
+            for (SoundInstance sound : playingSounds) {
+                if (event.getWorld() == ((WrapperWorld) sound.entity.world).world) {
+                    if (sound.radio != null) {
+                        sound.radio.stop();
+                    } else {
+                        sound.stopSound = true;
+                    }
+                }
+            }
+
+            //Mark world as un-paused and update sounds to stop the ones that were just removed.
+            isSystemPaused = false;
+            update();
+        }
+    }
+
     @Override
     public void playQuickSound(SoundInstance sound) {
         if (AL.isCreated() && sourceGetFailures < 10) {
@@ -368,88 +437,6 @@ public class InterfaceSound implements IInterfaceSound {
             }
         } else {
             return 0;
-        }
-    }
-
-    /**
-     * Loads an OGG file in its entirety using the {@link InterfaceOGGDecoder}.
-     * The sound is then stored in a dataBuffer keyed by soundName located in {@link #dataSourceBuffers}.
-     * The pointer to the dataBuffer is returned for convenience as it allows for transparent sound caching.
-     * If a sound with the same name is passed-in at a later time, it is assumed to be the same and rather
-     * than re-parse the sound the system will simply return the same pointer index to be bound.
-     */
-    private static Integer loadOGGJarSound(String soundName) {
-        if (dataSourceBuffers.containsKey(soundName)) {
-            //Already parsed the data.  Return the buffer.
-            return dataSourceBuffers.get(soundName);
-        } else {
-            //Need to parse the data.  Do so now.
-            String soundDomain = soundName.substring(0, soundName.indexOf(':'));
-            String soundPath = soundName.substring(soundDomain.length() + 1);
-            InputStream soundStream = InterfaceManager.coreInterface.getPackResource("/assets/" + soundDomain + "/sounds/" + soundPath + ".ogg");
-            if (soundStream != null) {
-                //Create decoder and decode whole file.
-                OGGDecoder decoder = new OGGDecoder(soundStream);
-                ByteBuffer decodedData = ByteBuffer.allocateDirect(0);
-                ByteBuffer blockRead;
-                while ((blockRead = decoder.readBlock()) != null) {
-                    decodedData = ByteBuffer.allocateDirect(decodedData.capacity() + blockRead.limit()).put(decodedData).put(blockRead);
-                    decodedData.rewind();
-                }
-
-                //Generate an IntBuffer to store a pointer to the data buffer.
-                IntBuffer dataBufferPointers = BufferUtils.createIntBuffer(1);
-                AL10.alGenBuffers(dataBufferPointers);
-
-                //Bind the decoder output buffer to the data buffer pointer.
-                AL10.alBufferData(dataBufferPointers.get(0), AL10.AL_FORMAT_MONO16, decodedData, decoder.getSampleRate());
-
-                //Done parsing.  Map the dataBuffer(s) to the soundName and return the index.
-                dataSourceBuffers.put(soundName, dataBufferPointers.get(0));
-                return dataSourceBuffers.get(soundName);
-            } else {
-                return null;
-            }
-        }
-    }
-
-    /**
-     * Update all sounds every client tick.
-     */
-    @SubscribeEvent
-    public static void onIVWorldTick(TickEvent.ClientTickEvent event) {
-        //Only do updates at the end of a phase to prevent double-updates.
-        if (event.phase.equals(Phase.END)) {
-            //We put this into a try block as sound system reloads can cause the thread to get stopped mid-execution.
-            try {
-                update();
-            } catch (Exception e) {
-                e.printStackTrace();
-                //Do nothing.  We only get exceptions here if OpenAL isn't ready.
-            }
-        }
-    }
-
-    /**
-     * Stop all sounds when the world is unloaded.
-     */
-    @SubscribeEvent
-    public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isRemote) {
-            queuedSounds.removeIf(soundInstance -> event.getWorld() == ((WrapperWorld) soundInstance.entity.world).world);
-            for (SoundInstance sound : playingSounds) {
-                if (event.getWorld() == ((WrapperWorld) sound.entity.world).world) {
-                    if (sound.radio != null) {
-                        sound.radio.stop();
-                    } else {
-                        sound.stopSound = true;
-                    }
-                }
-            }
-
-            //Mark world as un-paused and update sounds to stop the ones that were just removed.
-            isSystemPaused = false;
-            update();
         }
     }
 }

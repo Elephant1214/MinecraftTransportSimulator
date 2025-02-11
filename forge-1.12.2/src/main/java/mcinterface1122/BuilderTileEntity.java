@@ -1,8 +1,5 @@
 package mcinterface1122;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
@@ -12,6 +9,9 @@ import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Builder for the MC Tile Entity class   This class interfaces with all the MC-specific
@@ -29,12 +29,13 @@ import net.minecraft.util.ITickable;
  * @author don_bruce
  */
 public class BuilderTileEntity<TileEntityType extends ATileEntityBase<?>> extends TileEntity implements ITickable {
-    protected TileEntityType tileEntity;
-
     /**
-     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
+     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
+     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
+     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
      **/
-    private boolean needDataFromServer = true;
+    protected final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
+    protected TileEntityType tileEntity;
     /**
      * Data loaded on last NBT call.  Saved here to prevent loading of things until the update method.  This prevents
      * loading entity data when this entity isn't being ticked.  Some mods love to do this by making a lot of entities
@@ -53,11 +54,9 @@ public class BuilderTileEntity<TileEntityType extends ATileEntityBase<?>> extend
      **/
     protected boolean loadedFromSavedNBT;
     /**
-     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
-     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
-     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
+     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
      **/
-    protected final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
+    private boolean needDataFromServer = true;
 
     public BuilderTileEntity() {
         //Blank constructor for MC.

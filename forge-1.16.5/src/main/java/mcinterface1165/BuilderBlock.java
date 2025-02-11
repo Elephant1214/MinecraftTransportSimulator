@@ -1,5 +1,6 @@
 package mcinterface1165;
 
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
@@ -43,7 +44,7 @@ import java.util.Map;
  * @author don_bruce
  */
 public class BuilderBlock extends Block {
-    protected static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, InterfaceLoader.MODID);
+    protected static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, MtsInfo.MOD_ID);
 
     /**
      * Map of created blocks linked to their builder instances.  Used for interface operations.

@@ -1,16 +1,9 @@
 package mcinterface1122;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.items.instances.ItemItem;
 import minecrafttransportsimulator.jsondefs.JSONItem.ItemComponentType;
-import minecrafttransportsimulator.mcinterface.IWrapperEntity;
-import minecrafttransportsimulator.mcinterface.IWrapperInventory;
-import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.components.APacketBase;
 import minecrafttransportsimulator.systems.LanguageSystem.LanguageEntry;
 import net.minecraft.block.BlockWorkbench;
@@ -28,12 +21,20 @@ import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @EventBusSubscriber
 public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
     private static final Map<EntityPlayer, WrapperPlayer> playerClientWrappers = new HashMap<>();
     private static final Map<EntityPlayer, WrapperPlayer> playerServerWrappers = new HashMap<>();
 
     protected final EntityPlayer player;
+
+    protected WrapperPlayer(EntityPlayer player) {
+        super(player);
+        this.player = player;
+    }
 
     /**
      * Returns a wrapper instance for the passed-in player instance.
@@ -56,9 +57,16 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
         }
     }
 
-    protected WrapperPlayer(EntityPlayer player) {
-        super(player);
-        this.player = player;
+    /**
+     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
+     */
+    @SubscribeEvent
+    public static void onIVWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld().isRemote) {
+            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        } else {
+            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        }
     }
 
     @Override
@@ -170,17 +178,5 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
                 };
             }
         });
-    }
-
-    /**
-     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
-     */
-    @SubscribeEvent
-    public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isRemote) {
-            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        } else {
-            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        }
     }
 }

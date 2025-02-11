@@ -1,10 +1,5 @@
 package mcinterface1122;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import javax.annotation.Nullable;
-
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.BoundingBoxHitResult;
 import minecrafttransportsimulator.baseclasses.Point3D;
@@ -15,6 +10,10 @@ import net.minecraft.util.EnumFacing;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
+
+import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * This class is essentially a collective list of BoundingBoxes.  It intercepts all AABB

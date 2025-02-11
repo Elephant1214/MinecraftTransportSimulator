@@ -1,11 +1,6 @@
 package mcinterface1122;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.annotation.Nullable;
-
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.BoundingBoxHitResult;
 import minecrafttransportsimulator.baseclasses.Damage;
@@ -41,6 +36,11 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
 
+import javax.annotation.Nullable;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Builder for the main entity classes for MTS.  This builder allows us to create a new entity
  * class that we can control that doesn't have the wonky systems the MC entities have, such
@@ -58,15 +58,14 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
      * Maps Entity class names to instances of the IItemEntityProvider class that creates them.
      **/
     protected static final Map<String, IItemEntityFactory> entityMap = new HashMap<>();
-
-    /**
-     * Current entity we are built around.  This MAY be null if we haven't loaded NBT from the server yet.
-     **/
-    protected AEntityB_Existing entity;
     /**
      * Last saved explosion position (used for damage calcs).
      **/
     private static Point3D lastExplosionPosition;
+    /**
+     * Current entity we are built around.  This MAY be null if we haven't loaded NBT from the server yet.
+     **/
+    protected AEntityB_Existing entity;
     /**
      * Collective for collision boxes.  These are used by this entity to make things collide with it.
      **/
@@ -79,6 +78,35 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
 
     public BuilderEntityExisting(World world) {
         super(world);
+    }
+
+    /**
+     * We need to use explosion events here as we don't know where explosions occur in the world.
+     * This results in them being position-less, so we can't get the collision box they hit for damage.
+     * Whenever we have an explosion detonated in the world, save it's position.  We can then use it
+     * in {@link #attackEntityFrom(DamageSource, float)} to tell the system which part to attack.
+     */
+    @SubscribeEvent
+    public static void onIVExplosion(ExplosionEvent.Detonate event) {
+        if (!event.getWorld().isRemote) {
+            lastExplosionPosition = new Point3D(event.getExplosion().getPosition().x, event.getExplosion().getPosition().y, event.getExplosion().getPosition().z);
+        }
+    }
+
+    /**
+     * Registers all builder instances that build our own entities into the game.
+     */
+    @SubscribeEvent
+    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
+        //Iterate over all pack items and find those that spawn entities.
+        for (AItemPack<?> packItem : PackParser.getAllPackItems()) {
+            if (packItem instanceof IItemEntityProvider) {
+                ((IItemEntityProvider) packItem).registerEntities(entityMap);
+            }
+        }
+
+        //Now register our own classes.
+        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityExisting.class).id(new ResourceLocation(MtsInfo.MOD_ID, "mts_entity"), 0).name("mts_entity").tracker(32 * 16, 5, false).build());
     }
 
     @Override
@@ -248,43 +276,14 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
     }
 
     @Override
-    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
-        super.writeToNBT(tag);
+    public NBTTagCompound writeToNBT(NBTTagCompound compound) {
+        super.writeToNBT(compound);
         if (entity != null) {
             //Entity is valid, save it and return the modified tag.
             //Also save the class ID so we know what to construct when MC loads this Entity back up.
-            entity.save(new WrapperNBT(tag));
-            tag.setString("entityid", entity.getClass().getSimpleName());
+            entity.save(new WrapperNBT(compound));
+            compound.setString("entityid", entity.getClass().getSimpleName());
         }
-        return tag;
-    }
-
-    /**
-     * We need to use explosion events here as we don't know where explosions occur in the world.
-     * This results in them being position-less, so we can't get the collision box they hit for damage.
-     * Whenever we have an explosion detonated in the world, save it's position.  We can then use it
-     * in {@link #attackEntityFrom(DamageSource, float)} to tell the system which part to attack.
-     */
-    @SubscribeEvent
-    public static void onIVExplosion(ExplosionEvent.Detonate event) {
-        if (!event.getWorld().isRemote) {
-            lastExplosionPosition = new Point3D(event.getExplosion().getPosition().x, event.getExplosion().getPosition().y, event.getExplosion().getPosition().z);
-        }
-    }
-
-    /**
-     * Registers all builder instances that build our own entities into the game.
-     */
-    @SubscribeEvent
-    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
-        //Iterate over all pack items and find those that spawn entities.
-        for (AItemPack<?> packItem : PackParser.getAllPackItems()) {
-            if (packItem instanceof IItemEntityProvider) {
-                ((IItemEntityProvider) packItem).registerEntities(entityMap);
-            }
-        }
-
-        //Now register our own classes.
-        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityExisting.class).id(new ResourceLocation(InterfaceManager.coreModID, "mts_entity"), 0).name("mts_entity").tracker(32 * 16, 5, false).build());
+        return compound;
     }
 }

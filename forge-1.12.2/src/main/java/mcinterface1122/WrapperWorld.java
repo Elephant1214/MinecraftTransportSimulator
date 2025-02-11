@@ -1,20 +1,6 @@
 package mcinterface1122;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-
-import minecrafttransportsimulator.baseclasses.BlockHitResult;
-import minecrafttransportsimulator.baseclasses.BoundingBox;
-import minecrafttransportsimulator.baseclasses.ColorRGB;
-import minecrafttransportsimulator.baseclasses.Damage;
-import minecrafttransportsimulator.baseclasses.Point3D;
+import minecrafttransportsimulator.baseclasses.*;
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBase.Axis;
 import minecrafttransportsimulator.blocks.components.ABlockBase.BlockMaterial;
@@ -30,26 +16,12 @@ import minecrafttransportsimulator.entities.instances.PartSeat;
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.items.components.AItemSubTyped;
 import minecrafttransportsimulator.jsondefs.AJSONMultiModelProvider;
-import minecrafttransportsimulator.mcinterface.AWrapperWorld;
-import minecrafttransportsimulator.mcinterface.IWrapperEntity;
-import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import minecrafttransportsimulator.mcinterface.IWrapperNBT;
-import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.instances.PacketWorldSavedDataRequest;
 import minecrafttransportsimulator.packets.instances.PacketWorldSavedDataUpdate;
 import minecrafttransportsimulator.packloading.PackParser;
 import minecrafttransportsimulator.systems.ConfigSystem;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockBush;
-import net.minecraft.block.BlockColored;
-import net.minecraft.block.BlockConcretePowder;
-import net.minecraft.block.BlockCrops;
-import net.minecraft.block.BlockDirt;
-import net.minecraft.block.BlockFarmland;
-import net.minecraft.block.BlockLiquid;
-import net.minecraft.block.BlockSlab;
-import net.minecraft.block.IGrowable;
+import net.minecraft.block.*;
 import net.minecraft.block.material.MapColor;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -87,6 +59,10 @@ import net.minecraftforge.fml.common.gameevent.TickEvent.Phase;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.util.*;
+
 /**
  * Wrapper to a world instance.  This contains many common methods that
  * MC has seen fit to change over multiple versions (such as lighting) and as such
@@ -98,30 +74,13 @@ import net.minecraftforge.items.IItemHandler;
  */
 public class WrapperWorld extends AWrapperWorld {
     private static final Map<World, WrapperWorld> worldWrappers = new HashMap<>();
+    private static HashMap<Material, BlockMaterial> materialMap = new HashMap<>();
+    protected final World world;
     private final Map<UUID, BuilderEntityExisting> playerServerGunBuilders = new HashMap<>();
     private final Map<UUID, Integer> ticksSincePlayerJoin = new HashMap<>();
     private final List<AxisAlignedBB> mutableCollidingAABBs = new ArrayList<>();
     private final Set<BlockPos> knownAirBlocks = new HashSet<>();
-
-    protected final World world;
     private final IWrapperNBT savedData;
-
-    /**
-     * Returns a wrapper instance for the passed-in world instance.
-     * Wrapper is cached to avoid re-creating the wrapper each time it is requested.
-     */
-    public static WrapperWorld getWrapperFor(World world) {
-        if (world != null) {
-            WrapperWorld wrapper = worldWrappers.get(world);
-            if (wrapper == null || world != wrapper.world) {
-                wrapper = new WrapperWorld(world);
-                worldWrappers.put(world, wrapper);
-            }
-            return wrapper;
-        } else {
-            return null;
-        }
-    }
 
     private WrapperWorld(World world) {
         super();
@@ -144,6 +103,39 @@ public class WrapperWorld extends AWrapperWorld {
             }
         }
         MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    /**
+     * Returns a wrapper instance for the passed-in world instance.
+     * Wrapper is cached to avoid re-creating the wrapper each time it is requested.
+     */
+    public static WrapperWorld getWrapperFor(World world) {
+        if (world != null) {
+            WrapperWorld wrapper = worldWrappers.get(world);
+            if (wrapper == null || world != wrapper.world) {
+                wrapper = new WrapperWorld(world);
+                worldWrappers.put(world, wrapper);
+            }
+            return wrapper;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Helper method to convert a BoundingBox to an AxisAlignedBB.
+     */
+    public static AxisAlignedBB convert(BoundingBox box) {
+        return new AxisAlignedBB(box.globalCenter.x - box.widthRadius, box.globalCenter.y - box.heightRadius, box.globalCenter.z - box.depthRadius, box.globalCenter.x + box.widthRadius, box.globalCenter.y + box.heightRadius, box.globalCenter.z + box.depthRadius);
+    }
+
+    /**
+     * Helper method to convert the BoundingBox to an AxisAlignedBB.
+     * This method allows for an offset to the conversion, to prevent
+     * creating two AABBs (the conversion and the offset box).
+     */
+    public static AxisAlignedBB convertWithOffset(BoundingBox box, double x, double y, double z) {
+        return new AxisAlignedBB(x + box.globalCenter.x - box.widthRadius, y + box.globalCenter.y - box.heightRadius, z + box.globalCenter.z - box.depthRadius, x + box.globalCenter.x + box.widthRadius, y + box.globalCenter.y + box.heightRadius, z + box.globalCenter.z + box.depthRadius);
     }
 
     @Override
@@ -412,10 +404,9 @@ public class WrapperWorld extends AWrapperWorld {
         return state.getBlock().getSlipperiness(state, world, pos, null);
     }
 
-    private static HashMap<Material, BlockMaterial> materialMap = new HashMap<>();
     @Override
     public BlockMaterial getBlockMaterial(Point3D position) {
-        if(materialMap.isEmpty()) {
+        if (materialMap.isEmpty()) {
             materialMap.put(Material.CLAY, BlockMaterial.CLAY);
             materialMap.put(Material.GROUND, BlockMaterial.DIRT);
             materialMap.put(Material.GLASS, BlockMaterial.GLASS);
@@ -448,10 +439,10 @@ public class WrapperWorld extends AWrapperWorld {
             }
         }
     }
-    
+
     @Override
     public ColorRGB getBlockColor(Point3D position) {
-    	BlockPos pos = new BlockPos(position.x, position.y, position.z);
+        BlockPos pos = new BlockPos(position.x, position.y, position.z);
         IBlockState state = world.getBlockState(pos);
         MapColor mcColor = state.getMapColor(world, pos);
         return new ColorRGB(mcColor.colorValue);
@@ -1003,22 +994,6 @@ public class WrapperWorld extends AWrapperWorld {
     @Override
     public void spawnExplosion(Point3D location, double strength, boolean flames, boolean damageBlocks) {
         world.newExplosion(null, location.x, location.y, location.z, (float) strength, flames, damageBlocks);
-    }
-
-    /**
-     * Helper method to convert a BoundingBox to an AxisAlignedBB.
-     */
-    public static AxisAlignedBB convert(BoundingBox box) {
-        return new AxisAlignedBB(box.globalCenter.x - box.widthRadius, box.globalCenter.y - box.heightRadius, box.globalCenter.z - box.depthRadius, box.globalCenter.x + box.widthRadius, box.globalCenter.y + box.heightRadius, box.globalCenter.z + box.depthRadius);
-    }
-
-    /**
-     * Helper method to convert the BoundingBox to an AxisAlignedBB.
-     * This method allows for an offset to the conversion, to prevent
-     * creating two AABBs (the conversion and the offset box).
-     */
-    public static AxisAlignedBB convertWithOffset(BoundingBox box, double x, double y, double z) {
-        return new AxisAlignedBB(x + box.globalCenter.x - box.widthRadius, y + box.globalCenter.y - box.heightRadius, z + box.globalCenter.z - box.depthRadius, x + box.globalCenter.x + box.widthRadius, y + box.globalCenter.y + box.heightRadius, z + box.globalCenter.z + box.depthRadius);
     }
 
     /**

@@ -61,224 +61,41 @@ public class InterfaceRender implements IInterfaceRender {
     private static final Map<RenderableData, BufferData> buffers = new HashMap<>();
     private static final Map<RenderLayer, List<RenderData>> queuedRenders = new HashMap<>();
     private static final ConcurrentLinkedQueue<BufferData> removedRenders = new ConcurrentLinkedQueue<>();
-
+    /**
+     * Proper translucent transparency.  MC's one has the wrong blending function, and
+     * we need to disable writing to the depth buffer to prevent culling of other translucent
+     * objects, since we don't sort them and we could render behind an already-rendered transparent
+     * fragment.  Say if we have two headlight flares.
+     */
+    private static final RenderPhase.Transparency PROPER_TRANSLUCENT_TRANSPARENCY = new RenderPhase.Transparency("proper_translucent_transparency", () -> {
+        RenderSystem.enableBlend();
+        RenderSystem.depthMask(false);
+        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA);
+    }, () -> {
+        RenderSystem.disableBlend();
+        RenderSystem.depthMask(true);
+        RenderSystem.defaultBlendFunc();
+    });
+    /**
+     * Brightness transparency.  Does a special blending operation to make things behind
+     * the object brighter based on the object's alpha value.  More alpha means more bright.
+     */
+    private static final RenderPhase.Transparency BRIGHTNESS_TRANSPARENCY = new RenderPhase.Transparency("brightness_transparency", () -> {
+        RenderSystem.enableBlend();
+        RenderSystem.depthMask(false);
+        RenderSystem.blendFunc(GlStateManager.SrcFactor.DST_COLOR, GlStateManager.DstFactor.SRC_ALPHA);
+    }, () -> {
+        RenderSystem.disableBlend();
+        RenderSystem.depthMask(true);
+        RenderSystem.defaultBlendFunc();
+    });
+    public static Point3D renderCameraOffset = new Point3D();
     private static RenderPhase.Texture MISSING_STATE;
     private static RenderPhase.Texture BLOCK_STATE;
     private static MatrixStack matrixStack;
     private static VertexConsumerProvider renderBuffer;
-    public static Point3D renderCameraOffset = new Point3D();
     private static boolean renderingGUI;
     private static float[] matrixConvertArray = new float[16];
-
-    @Override
-    public float[] getBlockBreakTexture(AWrapperWorld world, Point3D position) {
-        //Get normal model.
-        BlockPos pos = new BlockPos(position.x, position.y, position.z);
-        BlockState state = ((WrapperWorld) world).world.getBlockState(pos);
-        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getTexture(state, ((WrapperWorld) world).world, pos);
-        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public float[] getDefaultBlockTexture(String name) {
-        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getModelManager().method_24153(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE).getSprite(new Identifier(name.replace(":", ":blocks/")));
-        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
-    }
-
-    @Override
-    public String getDefaultFontTextureFolder() {
-        return "/assets/minecraft/textures/font";
-    }
-
-    @Override
-    public InputStream getTextureStream(String name) {
-        try {
-            String domain = name.substring("/assets/".length(), name.indexOf("/", "/assets/".length()));
-            String location = name.substring("/assets/".length() + domain.length() + 1);
-            return MinecraftClient.getInstance().getResourceManager().getResource(new Identifier(domain, location)).getInputStream();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @Override
-    public void renderItemModel(GUIComponentItem component) {
-        stacksToRender.add(component);
-    }
-
-    @Override
-    public void renderVertices(RenderableData data, boolean changedSinceLastRender) {
-        matrixStack.push();
-        Matrix4f matrix4f = convertMatrix4f(data.transform);
-        MatrixStack.Entry stackEntry = matrixStack.peek();
-        stackEntry.getModel().multiply(matrix4f);
-
-        if (data.vertexObject.isLines) {
-            VertexConsumer buffer = renderBuffer.getBuffer(RenderLayer.getLines());
-            while (data.vertexObject.vertices.hasRemaining()) {
-                buffer.vertex(stackEntry.getModel(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get());
-                buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
-                buffer.next();
-            }
-            //Rewind buffer for next read.
-            data.vertexObject.vertices.rewind();
-        } else {
-            String typeId = data.texture + data.isTranslucent + data.lightingMode + data.enableBrightBlending;
-            final RenderLayer renderLayer;
-            if (data.vertexObject.cacheVertices && !renderingGUI && ConfigSystem.client.renderingSettings.renderingMode.value != 2) {
-                //Get the render type and data buffer for this entity.
-                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 2097152, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
-                BufferData buffer = buffers.computeIfAbsent(data, k -> new BufferData(renderLayer, data));
-
-                //Reset buffer if it's not ready.
-                if (changedSinceLastRender) {
-                    buffer.builder.clear();
-                    buffer.isReady = false;
-                }
-                if (!buffer.isReady) {
-                    int index = 0;
-                    buffer.builder.begin(GL11.GL_QUADS, renderLayer.getVertexFormat());
-                    while (data.vertexObject.vertices.hasRemaining()) {
-                        //Need to parse these out first since our order differs.
-                        float normalX = data.vertexObject.vertices.get();
-                        float normalY = data.vertexObject.vertices.get();
-                        float normalZ = data.vertexObject.vertices.get();
-                        float texU = data.vertexObject.vertices.get();
-                        float texV = data.vertexObject.vertices.get();
-                        float posX = data.vertexObject.vertices.get();
-                        float posY = data.vertexObject.vertices.get();
-                        float posZ = data.vertexObject.vertices.get();
-
-                        //Add the vertex format bits.
-                        do {
-                            buffer.builder.vertex(posX, posY, posZ, data.color.red, data.color.green, data.color.blue, data.alpha, texU, texV, OverlayTexture.DEFAULT_UV, data.worldLightValue, normalX, normalY, normalZ);
-                        } while (++index == 3);
-                        if (index == 4) {
-                            index = 0;
-                        }
-                    }
-                    buffer.isReady = true;
-                    buffer.builder.end();
-                    buffer.buffer.upload(buffer.builder);
-                    data.vertexObject.vertices.rewind();
-                }
-
-                //Add this buffer to the list to render later.
-                List<RenderData> renders = queuedRenders.get(renderLayer);
-                if (renders == null) {
-                    renders = new ArrayList<>();
-                    queuedRenders.put(renderLayer, renders);
-                }
-                renders.add(new RenderData(stackEntry.getModel(), buffer.buffer));
-            } else {
-                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 256, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
-                VertexConsumer buffer = renderBuffer.getBuffer(renderLayer);
-
-                //Now populate the state we requested.
-                int index = 0;
-                while (data.vertexObject.vertices.hasRemaining()) {
-                    //Need to parse these out first since our order differs.
-                    float normalX = data.vertexObject.vertices.get();
-                    float normalY = data.vertexObject.vertices.get();
-                    float normalZ = data.vertexObject.vertices.get();
-                    float texU = data.vertexObject.vertices.get();
-                    float texV = data.vertexObject.vertices.get();
-                    float posX = data.vertexObject.vertices.get();
-                    float posY = data.vertexObject.vertices.get();
-                    float posZ = data.vertexObject.vertices.get();
-
-                    //Add the vertex.  Yes, we have to multiply this here on the CPU.  Yes, it's retarded because the GPU should be doing the matrix math.
-                    //Blaze3d my ass, this is SLOWER than DisplayLists!
-                    //We also need to add the 3rd vertex twice, since the buffer wants quads rather than tris.
-                    //Yes, we have to render 25% more data because Mojang doesn't wanna move to tris like literally every other game.
-                    //Yes, they're stupid.
-                    do {
-                        buffer.vertex(stackEntry.getModel(), posX, posY, posZ);
-                        buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
-                        buffer.texture(texU, texV);
-                        buffer.overlay(OverlayTexture.DEFAULT_UV);
-                        buffer.light(data.worldLightValue);
-                        buffer.normal(stackEntry.getNormal(), normalX, normalY, normalZ);
-                        buffer.next();
-                    } while (++index == 3);
-                    if (index == 4) {
-                        index = 0;
-                    }
-                }
-                //Rewind buffer for next read.
-                data.vertexObject.vertices.rewind();
-            }
-        }
-        matrixStack.pop();
-    }
-
-    @Override
-    public void deleteVertices(RenderableData data) {
-        if (data.vertexObject.cacheVertices) {
-            //Add to removed render list, we should only remove renders AFTER they are rendered.
-            //This ensures they are un-bound, if the were bound prior.
-            //Make sure we actually bound a buffer; just because the main system asks for a bound buffer,
-            //doesn't mean we actually can give it one.  GUI models are one such case, as they don't work right
-            //with bound buffers due to matrix differences.
-            BufferData buffer = buffers.remove(data);
-            if (buffer != null) {
-                removedRenders.add(buffer);
-            }
-        }
-    }
-
-    @Override
-    public int getLightingAtPosition(Point3D position) {
-        BlockPos pos = new BlockPos(position.x, position.y, position.z);
-        return LightmapTextureManager.pack(MinecraftClient.getInstance().world.getLightLevel(LightType.BLOCK, pos), MinecraftClient.getInstance().world.getLightLevel(LightType.SKY, pos));
-    }
-
-    @Override
-    public boolean shouldRenderBoundingBoxes() {
-        return MinecraftClient.getInstance().getEntityRenderDispatcher().shouldRenderHitboxes();
-    }
-
-    @Override
-    public boolean bindURLTexture(String textureURL, InputStream stream) {
-        if (stream != null) {
-            try {
-                NativeImage image = NativeImage.read(NativeImage.Format.BGR, stream);
-                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
-                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-url", texture);
-                onlineTextures.put(textureURL, textureLocation);
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        } else {
-            onlineTextures.put(textureURL, null);
-            return true;
-        }
-    }
-
-    @Override
-    public boolean bindURLGIF(String textureURL, ParsedGIF gif) {
-        Map<GIFImageFrame, Identifier> gifFrameIndexes = new HashMap<>();
-        for (GIFImageFrame frame : gif.frames.values()) {
-            try {
-                BufferedImage frameBuffer = frame.getImage();
-                ByteArrayOutputStream frameArrayStream = new ByteArrayOutputStream();
-                ImageIO.write(frameBuffer, "gif", frameArrayStream);
-                InputStream frameStream = new ByteArrayInputStream(frameArrayStream.toByteArray());
-
-                NativeImage image = NativeImage.read(NativeImage.Format.BGR, frameStream);
-                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
-                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-gif", texture);
-                gifFrameIndexes.put(frame, textureLocation);
-            } catch (Exception e) {
-                return false;
-            }
-        }
-        animatedGIFs.put(textureURL, gif);
-        animatedGIFFrames.put(gif, gifFrameIndexes);
-        return true;
-    }
 
     /**
      * Helper function to create a new texture state for the specified texture location.
@@ -506,6 +323,215 @@ public class InterfaceRender implements IInterfaceRender {
         }
     }
 
+    @Override
+    public float[] getBlockBreakTexture(AWrapperWorld world, Point3D position) {
+        //Get normal model.
+        BlockPos pos = new BlockPos(position.x, position.y, position.z);
+        BlockState state = ((WrapperWorld) world).world.getBlockState(pos);
+        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getTexture(state, ((WrapperWorld) world).world, pos);
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public float[] getDefaultBlockTexture(String name) {
+        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getModelManager().method_24153(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE).getSprite(new Identifier(name.replace(":", ":blocks/")));
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
+    }
+
+    @Override
+    public String getDefaultFontTextureFolder() {
+        return "/assets/minecraft/textures/font";
+    }
+
+    @Override
+    public InputStream getTextureStream(String name) {
+        try {
+            String domain = name.substring("/assets/".length(), name.indexOf("/", "/assets/".length()));
+            String location = name.substring("/assets/".length() + domain.length() + 1);
+            return MinecraftClient.getInstance().getResourceManager().getResource(new Identifier(domain, location)).getInputStream();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public void renderItemModel(GUIComponentItem component) {
+        stacksToRender.add(component);
+    }
+
+    @Override
+    public void renderVertices(RenderableData data, boolean changedSinceLastRender) {
+        matrixStack.push();
+        Matrix4f matrix4f = convertMatrix4f(data.transform);
+        MatrixStack.Entry stackEntry = matrixStack.peek();
+        stackEntry.getModel().multiply(matrix4f);
+
+        if (data.vertexObject.isLines) {
+            VertexConsumer buffer = renderBuffer.getBuffer(RenderLayer.getLines());
+            while (data.vertexObject.vertices.hasRemaining()) {
+                buffer.vertex(stackEntry.getModel(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get());
+                buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
+                buffer.next();
+            }
+            //Rewind buffer for next read.
+            data.vertexObject.vertices.rewind();
+        } else {
+            String typeId = data.texture + data.isTranslucent + data.lightingMode + data.enableBrightBlending;
+            final RenderLayer renderLayer;
+            if (data.vertexObject.cacheVertices && !renderingGUI && ConfigSystem.client.renderingSettings.renderingMode.value != 2) {
+                //Get the render type and data buffer for this entity.
+                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 2097152, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
+                BufferData buffer = buffers.computeIfAbsent(data, k -> new BufferData(renderLayer, data));
+
+                //Reset buffer if it's not ready.
+                if (changedSinceLastRender) {
+                    buffer.builder.clear();
+                    buffer.isReady = false;
+                }
+                if (!buffer.isReady) {
+                    int index = 0;
+                    buffer.builder.begin(GL11.GL_QUADS, renderLayer.getVertexFormat());
+                    while (data.vertexObject.vertices.hasRemaining()) {
+                        //Need to parse these out first since our order differs.
+                        float normalX = data.vertexObject.vertices.get();
+                        float normalY = data.vertexObject.vertices.get();
+                        float normalZ = data.vertexObject.vertices.get();
+                        float texU = data.vertexObject.vertices.get();
+                        float texV = data.vertexObject.vertices.get();
+                        float posX = data.vertexObject.vertices.get();
+                        float posY = data.vertexObject.vertices.get();
+                        float posZ = data.vertexObject.vertices.get();
+
+                        //Add the vertex format bits.
+                        do {
+                            buffer.builder.vertex(posX, posY, posZ, data.color.red, data.color.green, data.color.blue, data.alpha, texU, texV, OverlayTexture.DEFAULT_UV, data.worldLightValue, normalX, normalY, normalZ);
+                        } while (++index == 3);
+                        if (index == 4) {
+                            index = 0;
+                        }
+                    }
+                    buffer.isReady = true;
+                    buffer.builder.end();
+                    buffer.buffer.upload(buffer.builder);
+                    data.vertexObject.vertices.rewind();
+                }
+
+                //Add this buffer to the list to render later.
+                List<RenderData> renders = queuedRenders.get(renderLayer);
+                if (renders == null) {
+                    renders = new ArrayList<>();
+                    queuedRenders.put(renderLayer, renders);
+                }
+                renders.add(new RenderData(stackEntry.getModel(), buffer.buffer));
+            } else {
+                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 256, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
+                VertexConsumer buffer = renderBuffer.getBuffer(renderLayer);
+
+                //Now populate the state we requested.
+                int index = 0;
+                while (data.vertexObject.vertices.hasRemaining()) {
+                    //Need to parse these out first since our order differs.
+                    float normalX = data.vertexObject.vertices.get();
+                    float normalY = data.vertexObject.vertices.get();
+                    float normalZ = data.vertexObject.vertices.get();
+                    float texU = data.vertexObject.vertices.get();
+                    float texV = data.vertexObject.vertices.get();
+                    float posX = data.vertexObject.vertices.get();
+                    float posY = data.vertexObject.vertices.get();
+                    float posZ = data.vertexObject.vertices.get();
+
+                    //Add the vertex.  Yes, we have to multiply this here on the CPU.  Yes, it's retarded because the GPU should be doing the matrix math.
+                    //Blaze3d my ass, this is SLOWER than DisplayLists!
+                    //We also need to add the 3rd vertex twice, since the buffer wants quads rather than tris.
+                    //Yes, we have to render 25% more data because Mojang doesn't wanna move to tris like literally every other game.
+                    //Yes, they're stupid.
+                    do {
+                        buffer.vertex(stackEntry.getModel(), posX, posY, posZ);
+                        buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
+                        buffer.texture(texU, texV);
+                        buffer.overlay(OverlayTexture.DEFAULT_UV);
+                        buffer.light(data.worldLightValue);
+                        buffer.normal(stackEntry.getNormal(), normalX, normalY, normalZ);
+                        buffer.next();
+                    } while (++index == 3);
+                    if (index == 4) {
+                        index = 0;
+                    }
+                }
+                //Rewind buffer for next read.
+                data.vertexObject.vertices.rewind();
+            }
+        }
+        matrixStack.pop();
+    }
+
+    @Override
+    public void deleteVertices(RenderableData data) {
+        if (data.vertexObject.cacheVertices) {
+            //Add to removed render list, we should only remove renders AFTER they are rendered.
+            //This ensures they are un-bound, if the were bound prior.
+            //Make sure we actually bound a buffer; just because the main system asks for a bound buffer,
+            //doesn't mean we actually can give it one.  GUI models are one such case, as they don't work right
+            //with bound buffers due to matrix differences.
+            BufferData buffer = buffers.remove(data);
+            if (buffer != null) {
+                removedRenders.add(buffer);
+            }
+        }
+    }
+
+    @Override
+    public int getLightingAtPosition(Point3D position) {
+        BlockPos pos = new BlockPos(position.x, position.y, position.z);
+        return LightmapTextureManager.pack(MinecraftClient.getInstance().world.getLightLevel(LightType.BLOCK, pos), MinecraftClient.getInstance().world.getLightLevel(LightType.SKY, pos));
+    }
+
+    @Override
+    public boolean shouldRenderBoundingBoxes() {
+        return MinecraftClient.getInstance().getEntityRenderDispatcher().shouldRenderHitboxes();
+    }
+
+    @Override
+    public boolean bindURLTexture(String textureURL, InputStream stream) {
+        if (stream != null) {
+            try {
+                NativeImage image = NativeImage.read(NativeImage.Format.BGR, stream);
+                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
+                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-url", texture);
+                onlineTextures.put(textureURL, textureLocation);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        } else {
+            onlineTextures.put(textureURL, null);
+            return true;
+        }
+    }
+
+    @Override
+    public boolean bindURLGIF(String textureURL, ParsedGIF gif) {
+        Map<GIFImageFrame, Identifier> gifFrameIndexes = new HashMap<>();
+        for (GIFImageFrame frame : gif.frames.values()) {
+            try {
+                BufferedImage frameBuffer = frame.getImage();
+                ByteArrayOutputStream frameArrayStream = new ByteArrayOutputStream();
+                ImageIO.write(frameBuffer, "gif", frameArrayStream);
+                InputStream frameStream = new ByteArrayInputStream(frameArrayStream.toByteArray());
+
+                NativeImage image = NativeImage.read(NativeImage.Format.BGR, frameStream);
+                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
+                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-gif", texture);
+                gifFrameIndexes.put(frame, textureLocation);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        animatedGIFs.put(textureURL, gif);
+        animatedGIFFrames.put(gif, gifFrameIndexes);
+        return true;
+    }
 
     /**
      * Blank render class used to bypass rendering for all other builders.
@@ -601,34 +627,4 @@ public class InterfaceRender implements IInterfaceRender {
             this.buffer = new VertexBuffer(layer.getVertexFormat());
         }
     }
-
-    /**
-     * Proper translucent transparency.  MC's one has the wrong blending function, and
-     * we need to disable writing to the depth buffer to prevent culling of other translucent
-     * objects, since we don't sort them and we could render behind an already-rendered transparent
-     * fragment.  Say if we have two headlight flares.
-     */
-    private static final RenderPhase.Transparency PROPER_TRANSLUCENT_TRANSPARENCY = new RenderPhase.Transparency("proper_translucent_transparency", () -> {
-        RenderSystem.enableBlend();
-        RenderSystem.depthMask(false);
-        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA);
-    }, () -> {
-        RenderSystem.disableBlend();
-        RenderSystem.depthMask(true);
-        RenderSystem.defaultBlendFunc();
-    });
-
-    /**
-     * Brightness transparency.  Does a special blending operation to make things behind
-     * the object brighter based on the object's alpha value.  More alpha means more bright.
-     */
-    private static final RenderPhase.Transparency BRIGHTNESS_TRANSPARENCY = new RenderPhase.Transparency("brightness_transparency", () -> {
-        RenderSystem.enableBlend();
-        RenderSystem.depthMask(false);
-        RenderSystem.blendFunc(GlStateManager.SrcFactor.DST_COLOR, GlStateManager.DstFactor.SRC_ALPHA);
-    }, () -> {
-        RenderSystem.disableBlend();
-        RenderSystem.depthMask(true);
-        RenderSystem.defaultBlendFunc();
-    });
 }

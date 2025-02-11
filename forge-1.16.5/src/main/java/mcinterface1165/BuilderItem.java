@@ -3,6 +3,7 @@ package mcinterface1165;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableMultimap.Builder;
 import com.google.common.collect.Multimap;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBase.Axis;
 import minecrafttransportsimulator.items.components.AItemBase;
@@ -57,7 +58,7 @@ import java.util.Map;
  * @author don_bruce
  */
 public class BuilderItem extends Item implements IBuilderItemInterface {
-    protected static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, InterfaceLoader.MODID);
+    protected static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, MtsInfo.MOD_ID);
 
     /**
      * Map of created items linked to their builder instances.  Used for interface operations.

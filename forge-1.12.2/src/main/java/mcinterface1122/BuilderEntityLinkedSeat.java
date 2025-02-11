@@ -1,8 +1,6 @@
 package mcinterface1122;
 
-import java.util.List;
-import java.util.UUID;
-
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.entities.components.AEntityB_Existing;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.entity.Entity;
@@ -14,6 +12,9 @@ import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.registry.EntityEntry;
 import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
+
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Builder for an entity to sit in so they can ride another entity.  We use this rather
@@ -27,10 +28,6 @@ import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
 public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
 
     /**
-     * UUID of entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
-     **/
-    private UUID entityUUID;
-    /**
      * Current entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
      **/
     protected AEntityB_Existing entity;
@@ -39,6 +36,10 @@ public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
      **/
     protected WrapperEntity rider;
     /**
+     * UUID of entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
+     **/
+    private UUID entityUUID;
+    /**
      * Set to true when the rider dismounts.  We set their position the next tick to override it.
      **/
     private boolean dismountedRider;
@@ -46,6 +47,14 @@ public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
     public BuilderEntityLinkedSeat(World world) {
         super(world);
         setSize(0.05F, 0.05F);
+    }
+
+    /**
+     * Registers our own class for use.
+     */
+    @SubscribeEvent
+    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
+        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityLinkedSeat.class).id(new ResourceLocation(MtsInfo.MOD_ID, "mts_entity_seat"), 1).tracker(32 * 16, 5, false).name("mts_entity_seat").build());
     }
 
     @Override
@@ -78,15 +87,15 @@ public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
                     setDead();
                 }
             }
-        } else if(entityUUID != null){
-        	if(ticksExisted < 100) {
+        } else if (entityUUID != null) {
+            if (ticksExisted < 100) {
                 WrapperWorld worldWrapper = WrapperWorld.getWrapperFor(world);
-        		entity = worldWrapper.getEntity(entityUUID);
-        	}else {
-        		InterfaceManager.coreInterface.logError("Found a seat but no entity was found for it.  Did a pack change?");
+                entity = worldWrapper.getEntity(entityUUID);
+            } else {
+                InterfaceManager.coreInterface.logError("Found a seat but no entity was found for it.  Did a pack change?");
                 setDead();
-        	}
-        }else if (loadFromSavedNBT) {
+            }
+        } else if (loadFromSavedNBT) {
             //Unlike modern MC, UUID isn't saved as a single key, and thus we can't "test" for it.
             //We can only get the UUID and fail in the above block.
             entityUUID = lastLoadedNBT.getUniqueId("entityUUID");
@@ -146,20 +155,12 @@ public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
     }
 
     @Override
-    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
-        super.writeToNBT(tag);
+    public NBTTagCompound writeToNBT(NBTTagCompound compound) {
+        super.writeToNBT(compound);
         if (entity != null) {
             //Entity is valid, save UUID and return the modified tag.
-            tag.setUniqueId("entityUUID", entity.uniqueUUID);
+            compound.setUniqueId("entityUUID", entity.uniqueUUID);
         }
-        return tag;
-    }
-
-    /**
-     * Registers our own class for use.
-     */
-    @SubscribeEvent
-    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
-        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityLinkedSeat.class).id(new ResourceLocation(InterfaceManager.coreModID, "mts_entity_seat"), 1).tracker(32 * 16, 5, false).name("mts_entity_seat").build());
+        return compound;
     }
 }

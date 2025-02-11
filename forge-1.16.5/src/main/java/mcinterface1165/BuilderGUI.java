@@ -19,12 +19,11 @@ import org.lwjgl.glfw.GLFW;
  * @author don_bruce
  */
 public class BuilderGUI extends Screen {
-    private int lastKeycodePressed;
-
     /**
      * Current gui we are built around.
      **/
     public final AGUIBase gui;
+    private int lastKeycodePressed;
 
     public BuilderGUI(AGUIBase gui) {
         super(new LiteralText(""));

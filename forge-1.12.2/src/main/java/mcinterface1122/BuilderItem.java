@@ -1,14 +1,7 @@
 package mcinterface1122;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import javax.annotation.Nullable;
-
 import com.google.common.collect.Multimap;
-
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBase.Axis;
 import minecrafttransportsimulator.items.components.AItemBase;
@@ -37,11 +30,7 @@ import net.minecraft.potion.Potion;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.stats.StatList;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.EnumActionResult;
-import net.minecraft.util.EnumFacing;
-import net.minecraft.util.EnumHand;
-import net.minecraft.util.SoundCategory;
+import net.minecraft.util.*;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.event.RegistryEvent;
@@ -50,6 +39,12 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import net.minecraftforge.oredict.OreDictionary;
+
+import javax.annotation.Nullable;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Builder for MC items.  Constructing a new item with this builder This will automatically
@@ -77,6 +72,38 @@ public class BuilderItem extends Item implements IBuilderItemInterface {
         setFull3D();
         this.setMaxStackSize(item.getStackSize());
         itemMap.put(item, this);
+    }
+
+    /**
+     * Registers all items we have created up to this point.
+     */
+    @SubscribeEvent
+    public static void registerItems(RegistryEvent.Register<Item> event) {
+        //Register all items in our wrapper map.
+        for (Entry<AItemBase, BuilderItem> entry : itemMap.entrySet()) {
+            AItemPack<?> item = (AItemPack<?>) entry.getKey();
+            BuilderItem mcItem = entry.getValue();
+
+            //First check if the creative tab is set/created.
+            //The only except is for "invisible" parts of the core mod, these are internal.
+            boolean hideOnCreativeTab = item.definition.general.hideOnCreativeTab || (item instanceof AItemSubTyped && ((AItemSubTyped<?>) item).subDefinition.hideOnCreativeTab);
+            if (!hideOnCreativeTab && (!item.definition.packID.equals(MtsInfo.MOD_ID) || !item.definition.systemName.contains("invisible"))) {
+                String tabID = item.getCreativeTabID();
+                if (!BuilderCreativeTab.createdTabs.containsKey(tabID)) {
+                    JSONPack packConfiguration = PackParser.getPackConfiguration(tabID);
+                    BuilderCreativeTab.createdTabs.put(tabID, new BuilderCreativeTab(packConfiguration.packName, itemMap.get(PackParser.getItem(packConfiguration.packID, packConfiguration.packItem))));
+                }
+                BuilderCreativeTab.createdTabs.get(tabID).addItem(item, mcItem);
+            }
+
+            //Register the item.
+            event.getRegistry().register(mcItem.setRegistryName(item.getRegistrationName()).setTranslationKey(item.getRegistrationName()));
+
+            //If the item is for OreDict, add it.
+            if (item.definition.general.oreDict != null) {
+                OreDictionary.registerOre(item.definition.general.oreDict, mcItem);
+            }
+        }
     }
 
     @Override
@@ -239,37 +266,5 @@ public class BuilderItem extends Item implements IBuilderItemInterface {
     @Override
     public boolean canDestroyBlockInCreative(World world, BlockPos pos, ItemStack stack, EntityPlayer player) {
         return item.canBreakBlocks();
-    }
-
-    /**
-     * Registers all items we have created up to this point.
-     */
-    @SubscribeEvent
-    public static void registerItems(RegistryEvent.Register<Item> event) {
-        //Register all items in our wrapper map.
-        for (Entry<AItemBase, BuilderItem> entry : itemMap.entrySet()) {
-            AItemPack<?> item = (AItemPack<?>) entry.getKey();
-            BuilderItem mcItem = entry.getValue();
-
-            //First check if the creative tab is set/created.
-            //The only except is for "invisible" parts of the core mod, these are internal.
-            boolean hideOnCreativeTab = item.definition.general.hideOnCreativeTab || (item instanceof AItemSubTyped && ((AItemSubTyped<?>) item).subDefinition.hideOnCreativeTab);
-            if (!hideOnCreativeTab && (!item.definition.packID.equals(InterfaceManager.coreModID) || !item.definition.systemName.contains("invisible"))) {
-                String tabID = item.getCreativeTabID();
-                if (!BuilderCreativeTab.createdTabs.containsKey(tabID)) {
-                    JSONPack packConfiguration = PackParser.getPackConfiguration(tabID);
-                    BuilderCreativeTab.createdTabs.put(tabID, new BuilderCreativeTab(packConfiguration.packName, itemMap.get(PackParser.getItem(packConfiguration.packID, packConfiguration.packItem))));
-                }
-                BuilderCreativeTab.createdTabs.get(tabID).addItem(item, mcItem);
-            }
-
-            //Register the item.
-            event.getRegistry().register(mcItem.setRegistryName(item.getRegistrationName()).setTranslationKey(item.getRegistrationName()));
-
-            //If the item is for OreDict, add it.
-            if (item.definition.general.oreDict != null) {
-                OreDictionary.registerOre(item.definition.general.oreDict, mcItem);
-            }
-        }
     }
 }

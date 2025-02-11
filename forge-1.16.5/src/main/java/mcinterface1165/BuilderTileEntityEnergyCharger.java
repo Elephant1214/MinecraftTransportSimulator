@@ -18,10 +18,9 @@ import org.jetbrains.annotations.NotNull;
  * @author don_bruce
  */
 public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements IEnergyStorage {
-    protected static RegistryObject<BlockEntityType<BuilderTileEntityEnergyCharger>> TE_TYPE2;
-
-    private ITileEntityEnergyCharger charger;
     private static final int MAX_BUFFER = 1000;
+    protected static RegistryObject<BlockEntityType<BuilderTileEntityEnergyCharger>> TE_TYPE2;
+    private ITileEntityEnergyCharger charger;
     private int buffer;
 
     public BuilderTileEntityEnergyCharger() {

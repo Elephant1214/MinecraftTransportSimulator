@@ -7,6 +7,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import minecrafttransportsimulator.MtsInfo;
+import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.entity.EntityType;
+import net.minecraft.item.FoodComponent;
+import net.minecraft.item.Item;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -28,11 +33,6 @@ import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackParser;
 import minecrafttransportsimulator.systems.ConfigSystem;
 import minecrafttransportsimulator.systems.LanguageSystem;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLConstructModEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
@@ -52,7 +52,6 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public class InterfaceLoader {
     public static final String MODID = "mts";
     public static final String MODNAME = "Immersive Vehicles (MTS)";
-    public static final String MODVER = "22.17.0";
 
     public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
     private final String gameDirectory;
@@ -94,7 +93,7 @@ public class InterfaceLoader {
             new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
         }
 
-        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MODVER);
+        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MtsInfo.VERSION);
 
         //Parse packs
         ConfigSystem.loadFromDisk(new File(gameDirectory, "config"), isClient);
@@ -122,7 +121,7 @@ public class InterfaceLoader {
                 if (item.autoGenerate()) {
                     //Crate the item registry creator.
                     BuilderItem.ITEMS.register(item.getRegistrationName(), () -> {
-                        Item.Properties itemProperties = new Item.Properties();
+                        Item.Settings itemSettings = new Item.Settings();
 
                         //Check if the creative tab is set/created.
                         //The only exception is for "invisible" parts of the core mod, these are internal.
@@ -134,15 +133,15 @@ public class InterfaceLoader {
                                 AItemPack<?> tabItem = packConfiguration.packItem != null ? PackParser.getItem(packConfiguration.packID, packConfiguration.packItem) : null;
                                 BuilderCreativeTab.createdTabs.put(tabID, new BuilderCreativeTab(packConfiguration.packName, tabItem));
                             }
-                            itemProperties.tab(BuilderCreativeTab.createdTabs.get(tabID));
+                            itemSettings.group(BuilderCreativeTab.createdTabs.get(tabID));
                         }
-                        itemProperties.stacksTo(item.getStackSize());
+                        itemSettings.maxCount(item.getStackSize());
                         if (item instanceof ItemItem && ((ItemItem) item).definition.food != null) {
                             IItemFood food = (IItemFood) item;
-                            itemProperties.food(new FoodProperties.Builder().nutrition(food.getHungerAmount()).saturationMod(food.getSaturationAmount()).build());
+                            itemSettings.food(new FoodComponent.Builder().hunger(food.getHungerAmount()).saturationModifier(food.getSaturationAmount()).build());
                         }
 
-                        return new BuilderItem(itemProperties, item);
+                        return new BuilderItem(itemSettings, item);
                     });
                 }
 

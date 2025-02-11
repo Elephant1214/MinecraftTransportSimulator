@@ -77,32 +77,14 @@ import java.util.*;
 
 public class WrapperWorld extends AWrapperWorld {
     private static final Map<World, WrapperWorld> worldWrappers = new HashMap<>();
+    private static final Map<UUID, BuilderEntityRenderForwarder> PLAYER_FOLLOWERS = new HashMap<>();
+    private static final HashMap<Material, BlockMaterial> MATERIAL_MAP = new HashMap<>();
+    protected final World world;
     private final Map<UUID, BuilderEntityExisting> playerServerGunBuilders = new HashMap<>();
     private final Map<UUID, Integer> ticksSincePlayerJoin = new HashMap<>();
-    private static final Map<UUID, BuilderEntityRenderForwarder> PLAYER_FOLLOWERS = new HashMap<>();
     private final List<Box> mutableCollidingAABBs = new ArrayList<>();
     private final Set<BlockPos> knownAirBlocks = new HashSet<>();
-
-
-    protected final World world;
     private final IWrapperNBT savedData;
-
-    /**
-     * Returns a wrapper instance for the passed-in world instance.
-     * Wrapper is cached to avoid re-creating the wrapper each time it is requested.
-     */
-    public static WrapperWorld getWrapperFor(World world) {
-        if (world != null) {
-            WrapperWorld wrapper = worldWrappers.get(world);
-            if (wrapper == null || world != wrapper.world) {
-                wrapper = new WrapperWorld(world);
-                worldWrappers.put(world, wrapper);
-            }
-            return wrapper;
-        } else {
-            return null;
-        }
-    }
 
     private WrapperWorld(World world) {
         super();
@@ -125,6 +107,39 @@ public class WrapperWorld extends AWrapperWorld {
             }
         }
         MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    /**
+     * Returns a wrapper instance for the passed-in world instance.
+     * Wrapper is cached to avoid re-creating the wrapper each time it is requested.
+     */
+    public static WrapperWorld getWrapperFor(World world) {
+        if (world != null) {
+            WrapperWorld wrapper = worldWrappers.get(world);
+            if (wrapper == null || world != wrapper.world) {
+                wrapper = new WrapperWorld(world);
+                worldWrappers.put(world, wrapper);
+            }
+            return wrapper;
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Helper method to convert a BoundingBox to an Box.
+     */
+    public static Box convert(BoundingBox box) {
+        return new Box(box.globalCenter.x - box.widthRadius, box.globalCenter.y - box.heightRadius, box.globalCenter.z - box.depthRadius, box.globalCenter.x + box.widthRadius, box.globalCenter.y + box.heightRadius, box.globalCenter.z + box.depthRadius);
+    }
+
+    /**
+     * Helper method to convert the BoundingBox to an Box.
+     * This method allows for an offset to the conversion, to prevent
+     * creating two AABBs (the conversion and the offset box).
+     */
+    public static Box convertWithOffset(BoundingBox box, double x, double y, double z) {
+        return new Box(x + box.globalCenter.x - box.widthRadius, y + box.globalCenter.y - box.heightRadius, z + box.globalCenter.z - box.depthRadius, x + box.globalCenter.x + box.widthRadius, y + box.globalCenter.y + box.heightRadius, z + box.globalCenter.z + box.depthRadius);
     }
 
     @Override
@@ -395,8 +410,6 @@ public class WrapperWorld extends AWrapperWorld {
         BlockPos pos = new BlockPos(position.x, position.y, position.z);
         return this.world.getBlockState(pos).getSlipperiness(this.world, pos, null);
     }
-
-    private static final HashMap<Material, BlockMaterial> MATERIAL_MAP = new HashMap<>();
 
     @Override
     public BlockMaterial getBlockMaterial(Point3D position) {
@@ -971,22 +984,6 @@ public class WrapperWorld extends AWrapperWorld {
     @Override
     public void spawnExplosion(Point3D location, double strength, boolean flames, boolean damageBlocks) {
         this.world.createExplosion(null, location.x, location.y, location.z, (float) strength, flames, damageBlocks ? Explosion.DestructionType.DESTROY : Explosion.DestructionType.NONE);
-    }
-
-    /**
-     * Helper method to convert a BoundingBox to an Box.
-     */
-    public static Box convert(BoundingBox box) {
-        return new Box(box.globalCenter.x - box.widthRadius, box.globalCenter.y - box.heightRadius, box.globalCenter.z - box.depthRadius, box.globalCenter.x + box.widthRadius, box.globalCenter.y + box.heightRadius, box.globalCenter.z + box.depthRadius);
-    }
-
-    /**
-     * Helper method to convert the BoundingBox to an Box.
-     * This method allows for an offset to the conversion, to prevent
-     * creating two AABBs (the conversion and the offset box).
-     */
-    public static Box convertWithOffset(BoundingBox box, double x, double y, double z) {
-        return new Box(x + box.globalCenter.x - box.widthRadius, y + box.globalCenter.y - box.heightRadius, z + box.globalCenter.z - box.depthRadius, x + box.globalCenter.x + box.widthRadius, y + box.globalCenter.y + box.heightRadius, z + box.globalCenter.z + box.depthRadius);
     }
 
     /**

@@ -1,5 +1,6 @@
 package mcinterface1165;
 
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.EntityManager;
 import minecrafttransportsimulator.guis.instances.GUIConfig;
 import minecrafttransportsimulator.jsondefs.JSONConfigClient.ConfigJoystick;
@@ -27,28 +28,62 @@ import java.util.Map.Entry;
 
 @EventBusSubscriber(Dist.CLIENT)
 public class InterfaceInput implements IInterfaceInput {
-    //Common variables.
-    private static KeyBinding configKey;
-    private static KeyBinding importKey;
-    private static int lastScrollValue;
-
-    //Joystick variables.
-    private static boolean runningJoystickThread = false;
-    private static boolean runningClassicMode = false;
-    private static boolean joystickLoadingAttempted = false;
-    private static boolean joystickEnabled = false;
-    private static boolean joystickBlocked = false;
     private static final Map<String, Integer> joystickNameCounters = new HashMap<>();
-
     //Normal mode joystick variables.
     private static final Map<String, Integer> joystickMap = new LinkedHashMap<>();
     private static final Map<String, Integer> joystickAxisCounts = new LinkedHashMap<>();
     private static final Map<String, Integer> joystickHatCounts = new LinkedHashMap<>();
     private static final Map<String, Integer> joystickButtonCounts = new LinkedHashMap<>();
     private static final Map<String, Integer> joystickComponentCounts = new LinkedHashMap<>();
-
     //Classic mode joystick variables.
     private static final Map<String, net.java.games.input.Controller> classicJoystickMap = new LinkedHashMap<>();
+    //Common variables.
+    private static KeyBinding configKey;
+    private static KeyBinding importKey;
+    private static int lastScrollValue;
+    //Joystick variables.
+    private static boolean runningJoystickThread = false;
+    private static boolean runningClassicMode = false;
+    private static boolean joystickLoadingAttempted = false;
+    private static boolean joystickEnabled = false;
+    private static boolean joystickBlocked = false;
+
+    /**
+     * Opens the config screen when the config key is pressed.
+     * Also init the joystick system if we haven't already.
+     */
+    @SubscribeEvent
+    public static void onIVKeyInput(KeyInputEvent event) {
+        //Check if we switched joystick modes.
+        if (runningClassicMode ^ ConfigSystem.client.controlSettings.classicJystk.value) {
+            runningClassicMode = ConfigSystem.client.controlSettings.classicJystk.value;
+            joystickLoadingAttempted = false;
+        }
+
+        //Init joysticks if we haven't already tried or if we switched loaders.
+        if (!joystickLoadingAttempted) {
+            InterfaceManager.inputInterface.initJoysticks();
+            joystickLoadingAttempted = true;
+        }
+
+        //Check if we pressed the config or import key.
+        if (configKey.isPressed() && !InterfaceManager.clientInterface.isGUIOpen()) {
+            new GUIConfig();
+        } else if (ConfigSystem.settings.general.devMode.value && importKey.isPressed()) {
+            EntityManager.doImports(() -> InterfaceManager.clientInterface.getClientPlayer().displayChatMessage(LanguageSystem.SYSTEM_DEBUG, JSONParser.importAllJSONs(true)));
+        }
+    }
+
+    /**
+     * Gets mouse scroll data, since we have to register a listner, and MC already does this for us.
+     */
+    @SubscribeEvent
+    public static void onIVMouseScroll(GuiScreenEvent.MouseScrollEvent.Post event) {
+        if (InterfaceManager.clientInterface.isGUIOpen()) {
+            lastScrollValue = (int) event.getScrollDelta();
+            event.setCanceled(true);
+        }
+    }
 
     @Override
     public int getKeysetID() {
@@ -57,9 +92,9 @@ public class InterfaceInput implements IInterfaceInput {
 
     @Override
     public void initConfigKey() {
-        configKey = new KeyBinding(LanguageSystem.GUI_MASTERCONFIG.getCurrentValue(), GLFW.GLFW_KEY_P, InterfaceLoader.MODNAME);
+        configKey = new KeyBinding(LanguageSystem.GUI_MASTERCONFIG.getCurrentValue(), GLFW.GLFW_KEY_P, MtsInfo.MOD_NAME);
         ClientRegistry.registerKeyBinding(configKey);
-        importKey = new KeyBinding(LanguageSystem.GUI_IMPORT.getCurrentValue(), GLFW.GLFW_KEY_UNKNOWN, InterfaceLoader.MODNAME);
+        importKey = new KeyBinding(LanguageSystem.GUI_IMPORT.getCurrentValue(), GLFW.GLFW_KEY_UNKNOWN, MtsInfo.MOD_NAME);
         ClientRegistry.registerKeyBinding(importKey);
     }
 
@@ -320,42 +355,5 @@ public class InterfaceInput implements IInterfaceInput {
     @Override
     public boolean isRightMouseButtonDown() {
         return MinecraftClient.getInstance().options.keyUse.isPressed();
-    }
-
-    /**
-     * Opens the config screen when the config key is pressed.
-     * Also init the joystick system if we haven't already.
-     */
-    @SubscribeEvent
-    public static void onIVKeyInput(KeyInputEvent event) {
-        //Check if we switched joystick modes.
-        if (runningClassicMode ^ ConfigSystem.client.controlSettings.classicJystk.value) {
-            runningClassicMode = ConfigSystem.client.controlSettings.classicJystk.value;
-            joystickLoadingAttempted = false;
-        }
-
-        //Init joysticks if we haven't already tried or if we switched loaders.
-        if (!joystickLoadingAttempted) {
-            InterfaceManager.inputInterface.initJoysticks();
-            joystickLoadingAttempted = true;
-        }
-
-        //Check if we pressed the config or import key.
-        if (configKey.isPressed() && !InterfaceManager.clientInterface.isGUIOpen()) {
-            new GUIConfig();
-        } else if (ConfigSystem.settings.general.devMode.value && importKey.isPressed()) {
-            EntityManager.doImports(() -> InterfaceManager.clientInterface.getClientPlayer().displayChatMessage(LanguageSystem.SYSTEM_DEBUG, JSONParser.importAllJSONs(true)));
-        }
-    }
-
-    /**
-     * Gets mouse scroll data, since we have to register a listner, and MC already does this for us.
-     */
-    @SubscribeEvent
-    public static void onIVMouseScroll(GuiScreenEvent.MouseScrollEvent.Post event) {
-        if (InterfaceManager.clientInterface.isGUIOpen()) {
-            lastScrollValue = (int) event.getScrollDelta();
-            event.setCanceled(true);
-        }
     }
 }

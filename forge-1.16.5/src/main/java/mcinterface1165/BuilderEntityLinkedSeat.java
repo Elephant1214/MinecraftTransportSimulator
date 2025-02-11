@@ -22,11 +22,6 @@ import java.util.UUID;
  */
 public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
     public static RegistryObject<EntityType<BuilderEntityLinkedSeat>> E_TYPE3;
-
-    /**
-     * UUID of entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
-     **/
-    private UUID entityUuid;
     /**
      * Current entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
      **/
@@ -35,6 +30,10 @@ public class BuilderEntityLinkedSeat extends ABuilderEntityBase {
      * Current rider for this seat.  This MAY be null if we haven't loaded NBT from the server yet.
      **/
     protected WrapperEntity rider;
+    /**
+     * UUID of entity we are a seat on.  This MAY be null if we haven't loaded NBT from the server yet.
+     **/
+    private UUID entityUuid;
     /**
      * Set to true when the rider dismounts.  We set their position the next tick to override it.
      **/

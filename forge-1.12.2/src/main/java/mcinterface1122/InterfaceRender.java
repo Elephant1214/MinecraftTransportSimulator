@@ -1,21 +1,5 @@
 package mcinterface1122;
 
-import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.DoubleBuffer;
-import java.nio.FloatBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.lwjgl.opengl.GL11;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.baseclasses.TransformationMatrix;
 import minecrafttransportsimulator.guis.components.AGUIBase;
@@ -42,6 +26,15 @@ import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
+import org.lwjgl.opengl.GL11;
+
+import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.DoubleBuffer;
+import java.nio.FloatBuffer;
+import java.util.*;
 
 /**
  * Interface for the various MC rendering engines.  This class has functions for
@@ -57,155 +50,12 @@ public class InterfaceRender implements IInterfaceRender {
     private static final Map<String, ParsedGIF> animatedGIFs = new HashMap<>();
     private static final Map<ParsedGIF, Map<GIFImageFrame, Integer>> animatedGIFFrames = new LinkedHashMap<>();
     private static final List<GUIComponentItem> stacksToRender = new ArrayList<>();
-    private static float lastLightmapX;
-    private static float lastLightmapY;
     private static final ResourceLocation MISSING_TEXTURE = new ResourceLocation("mts:textures/rendering/missing.png");
     private static final Map<RenderableVertices, Set<RenderableData>> objectMap = new HashMap<>();
     private static final Map<RenderableVertices, Integer> cachedIndexMap = new HashMap<>();
     protected static int lastRenderPassActualPass;
-
-    @Override
-    public float[] getBlockBreakTexture(AWrapperWorld world, Point3D position) {
-        //Get normal model.
-        IBlockState state = ((WrapperWorld) world).world.getBlockState(new BlockPos(position.x, position.y, position.z));
-        TextureAtlasSprite sprite = Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getTexture(state);
-        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
-    }
-
-    @Override
-    public float[] getDefaultBlockTexture(String name) {
-        TextureAtlasSprite sprite = Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getModelManager().getTextureMap().getAtlasSprite(name.replace(":", ":blocks/"));
-        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
-    }
-
-    @Override
-    public String getDefaultFontTextureFolder() {
-        return "/assets/minecraft/textures/font";
-    }
-
-    @Override
-    public InputStream getTextureStream(String name) {
-        try {
-            String domain = name.substring("/assets/".length(), name.indexOf("/", "/assets/".length()));
-            String location = name.substring("/assets/".length() + domain.length() + 1);
-            return Minecraft.getMinecraft().getResourceManager().getResource(new ResourceLocation(domain, location)).getInputStream();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @Override
-    public void renderItemModel(GUIComponentItem component) {
-        stacksToRender.add(component);
-    }
-
-    @Override
-    public void renderVertices(RenderableData data, boolean changedSinceLastRender) {
-        if (data.lightingMode.disableWorldLighting || data.vertexObject.isLines) {
-            setLightingState(false);
-        }
-        if (data.lightingMode.disableTextureShadows) {
-            setSystemLightingState(false);
-        }
-        if (data.enableBrightBlending) {
-            setBlendBright(true);
-        }
-        if (data.texture != null) {
-            bindTexture(data.texture);
-        } else {
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
-        }
-        GlStateManager.color(data.color.red, data.color.green, data.color.blue, data.alpha);
-        if (!data.lightingMode.disableWorldLighting && !data.vertexObject.isLines) {
-            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, data.worldLightValue % 65536, data.worldLightValue / 65536);
-        }
-
-        GL11.glPushMatrix();
-        applyTransformOpenGL(data.transform);
-        if (data.vertexObject.cacheVertices && ConfigSystem.client.renderingSettings.renderingMode.value != 2) {
-        	//Add entity to the rendering mapping once rendered.
-            objectMap.computeIfAbsent(data.vertexObject, k -> new HashSet<>()).add(data);
-            int cachedVertexIndex = cachedIndexMap.computeIfAbsent(data.vertexObject, k -> {
-                int newIndex = GL11.glGenLists(1);
-                GL11.glNewList(newIndex, GL11.GL_COMPILE);
-                renderVertices(data.vertexObject.vertices);
-                GL11.glEndList();
-                return newIndex;
-            });
-            GL11.glCallList(cachedVertexIndex);
-        } else if (data.vertexObject.isLines) {
-            renderLines(data.vertexObject.vertices);
-        } else {
-            renderVertices(data.vertexObject.vertices);
-        }
-        GL11.glPopMatrix();
-
-        if (data.texture == null) {
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-        }
-        if (data.lightingMode.disableWorldLighting || data.lightingMode.disableTextureShadows || data.vertexObject.isLines) {
-            setLightingState(true);
-        }
-        if (data.enableBrightBlending) {
-            setBlendBright(false);
-        }
-    }
-
-    @Override
-    public void deleteVertices(RenderableData data) {
-        if (data.vertexObject.cacheVertices) {
-            //Only delete display list if no data objects are using it.
-            Set<RenderableData> set = objectMap.get(data.vertexObject);
-            if (set != null) {
-                set.remove(data);
-                if (set.isEmpty()) {
-                    objectMap.remove(data.vertexObject);
-                    GL11.glDeleteLists(cachedIndexMap.remove(data.vertexObject), 1);
-                }
-            }
-    	}
-    }
-
-    @Override
-    public boolean bindURLTexture(String textureURL, InputStream stream) {
-        if (stream != null) {
-            try {
-                BufferedImage image = TextureUtil.readBufferedImage(stream);
-                int glTexturePointer = TextureUtil.glGenTextures();
-                TextureUtil.uploadTextureImageAllocate(glTexturePointer, image, false, false);
-                onlineTextures.put(textureURL, glTexturePointer);
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        } else {
-            onlineTextures.put(textureURL, TextureUtil.MISSING_TEXTURE.getGlTextureId());
-            return false;
-        }
-    }
-
-    @Override
-    public boolean bindURLGIF(String textureURL, ParsedGIF gif) {
-        Map<GIFImageFrame, Integer> gifFrameIndexes = new HashMap<>();
-        for (GIFImageFrame frame : gif.frames.values()) {
-            int glTexturePointer = TextureUtil.glGenTextures();
-            TextureUtil.uploadTextureImageAllocate(glTexturePointer, frame.getImage(), false, false);
-            gifFrameIndexes.put(frame, glTexturePointer);
-        }
-        animatedGIFs.put(textureURL, gif);
-        animatedGIFFrames.put(gif, gifFrameIndexes);
-        return true;
-    }
-
-    @Override
-    public int getLightingAtPosition(Point3D position) {
-        return Minecraft.getMinecraft().world.getCombinedLight(new BlockPos(position.x, position.y, position.z), 0);
-    }
-
-    @Override
-    public boolean shouldRenderBoundingBoxes() {
-        return Minecraft.getMinecraft().getRenderManager().isDebugBoundingBox();
-    }
+    private static float lastLightmapX;
+    private static float lastLightmapY;
 
     /**
      * Renders a set of raw vertices without any caching.
@@ -483,5 +333,148 @@ public class InterfaceRender implements IInterfaceRender {
         } else {
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         }
+    }
+
+    @Override
+    public float[] getBlockBreakTexture(AWrapperWorld world, Point3D position) {
+        //Get normal model.
+        IBlockState state = ((WrapperWorld) world).world.getBlockState(new BlockPos(position.x, position.y, position.z));
+        TextureAtlasSprite sprite = Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getTexture(state);
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
+    }
+
+    @Override
+    public float[] getDefaultBlockTexture(String name) {
+        TextureAtlasSprite sprite = Minecraft.getMinecraft().getBlockRendererDispatcher().getBlockModelShapes().getModelManager().getTextureMap().getAtlasSprite(name.replace(":", ":blocks/"));
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
+    }
+
+    @Override
+    public String getDefaultFontTextureFolder() {
+        return "/assets/minecraft/textures/font";
+    }
+
+    @Override
+    public InputStream getTextureStream(String name) {
+        try {
+            String domain = name.substring("/assets/".length(), name.indexOf("/", "/assets/".length()));
+            String location = name.substring("/assets/".length() + domain.length() + 1);
+            return Minecraft.getMinecraft().getResourceManager().getResource(new ResourceLocation(domain, location)).getInputStream();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public void renderItemModel(GUIComponentItem component) {
+        stacksToRender.add(component);
+    }
+
+    @Override
+    public void renderVertices(RenderableData data, boolean changedSinceLastRender) {
+        if (data.lightingMode.disableWorldLighting || data.vertexObject.isLines) {
+            setLightingState(false);
+        }
+        if (data.lightingMode.disableTextureShadows) {
+            setSystemLightingState(false);
+        }
+        if (data.enableBrightBlending) {
+            setBlendBright(true);
+        }
+        if (data.texture != null) {
+            bindTexture(data.texture);
+        } else {
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+        }
+        GlStateManager.color(data.color.red, data.color.green, data.color.blue, data.alpha);
+        if (!data.lightingMode.disableWorldLighting && !data.vertexObject.isLines) {
+            OpenGlHelper.setLightmapTextureCoords(OpenGlHelper.lightmapTexUnit, data.worldLightValue % 65536, data.worldLightValue / 65536);
+        }
+
+        GL11.glPushMatrix();
+        applyTransformOpenGL(data.transform);
+        if (data.vertexObject.cacheVertices && ConfigSystem.client.renderingSettings.renderingMode.value != 2) {
+            //Add entity to the rendering mapping once rendered.
+            objectMap.computeIfAbsent(data.vertexObject, k -> new HashSet<>()).add(data);
+            int cachedVertexIndex = cachedIndexMap.computeIfAbsent(data.vertexObject, k -> {
+                int newIndex = GL11.glGenLists(1);
+                GL11.glNewList(newIndex, GL11.GL_COMPILE);
+                renderVertices(data.vertexObject.vertices);
+                GL11.glEndList();
+                return newIndex;
+            });
+            GL11.glCallList(cachedVertexIndex);
+        } else if (data.vertexObject.isLines) {
+            renderLines(data.vertexObject.vertices);
+        } else {
+            renderVertices(data.vertexObject.vertices);
+        }
+        GL11.glPopMatrix();
+
+        if (data.texture == null) {
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+        }
+        if (data.lightingMode.disableWorldLighting || data.lightingMode.disableTextureShadows || data.vertexObject.isLines) {
+            setLightingState(true);
+        }
+        if (data.enableBrightBlending) {
+            setBlendBright(false);
+        }
+    }
+
+    @Override
+    public void deleteVertices(RenderableData data) {
+        if (data.vertexObject.cacheVertices) {
+            //Only delete display list if no data objects are using it.
+            Set<RenderableData> set = objectMap.get(data.vertexObject);
+            if (set != null) {
+                set.remove(data);
+                if (set.isEmpty()) {
+                    objectMap.remove(data.vertexObject);
+                    GL11.glDeleteLists(cachedIndexMap.remove(data.vertexObject), 1);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean bindURLTexture(String textureURL, InputStream stream) {
+        if (stream != null) {
+            try {
+                BufferedImage image = TextureUtil.readBufferedImage(stream);
+                int glTexturePointer = TextureUtil.glGenTextures();
+                TextureUtil.uploadTextureImageAllocate(glTexturePointer, image, false, false);
+                onlineTextures.put(textureURL, glTexturePointer);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        } else {
+            onlineTextures.put(textureURL, TextureUtil.MISSING_TEXTURE.getGlTextureId());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean bindURLGIF(String textureURL, ParsedGIF gif) {
+        Map<GIFImageFrame, Integer> gifFrameIndexes = new HashMap<>();
+        for (GIFImageFrame frame : gif.frames.values()) {
+            int glTexturePointer = TextureUtil.glGenTextures();
+            TextureUtil.uploadTextureImageAllocate(glTexturePointer, frame.getImage(), false, false);
+            gifFrameIndexes.put(frame, glTexturePointer);
+        }
+        animatedGIFs.put(textureURL, gif);
+        animatedGIFFrames.put(gif, gifFrameIndexes);
+        return true;
+    }
+
+    @Override
+    public int getLightingAtPosition(Point3D position) {
+        return Minecraft.getMinecraft().world.getCombinedLight(new BlockPos(position.x, position.y, position.z), 0);
+    }
+
+    @Override
+    public boolean shouldRenderBoundingBoxes() {
+        return Minecraft.getMinecraft().getRenderManager().isDebugBoundingBox();
     }
 }

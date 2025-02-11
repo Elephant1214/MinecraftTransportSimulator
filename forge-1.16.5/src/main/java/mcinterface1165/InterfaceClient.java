@@ -43,10 +43,94 @@ import java.util.Map.Entry;
 
 @EventBusSubscriber(Dist.CLIENT)
 public class InterfaceClient implements IInterfaceClient {
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    private static final Point3D mutablePosition = new Point3D();
     private static CameraMode actualCameraMode;
     private static CameraMode cameraModeRequest;
     private static int ticksToCullingWarning = 200;
+    private final MinecraftClient client = MinecraftClient.getInstance();
+
+    /**
+     * Tick client-side entities like bullets and particles.
+     * These don't get ticked normally due to the world tick event
+     * not being called on clients.
+     */
+    @SubscribeEvent
+    public static void onIVClientTick(TickEvent.ClientTickEvent event) {
+        IWrapperPlayer player = InterfaceManager.clientInterface.getClientPlayer();
+        if (!InterfaceManager.clientInterface.isGamePaused() && player != null) {
+            AWrapperWorld world = InterfaceManager.clientInterface.getClientWorld();
+            if (world != null) {
+                if (event.phase.equals(Phase.START)) {
+                    if (!player.isSpectator()) {
+                        //Handle controls.  This has to happen prior to vehicle updates to ensure click handling is based on current position of the player.
+                        ControlSystem.controlGlobal(player);
+                        if (((WrapperPlayer) player).player.age % 100 == 0) {
+                            if (!InterfaceManager.clientInterface.isGUIOpen() && !PackParser.arePacksPresent()) {
+                                new GUIPackMissing();
+                            }
+                        }
+                    }
+
+                    //Need to update world brightness since sky darken isn't calculated normally on clients.
+                    ((WrapperWorld) world).world.calculateAmbientDarkness();
+
+                    world.tickAll(true);
+
+                    //Complain about compats at 10 second mark.
+                    if (ConfigSystem.settings.general.performModCompatFunctions.value) {
+                        if (ticksToCullingWarning > 0) {
+                            if (--ticksToCullingWarning == 0) {
+                                if (InterfaceManager.coreInterface.isModPresent("entityculling")) {
+                                    player.displayChatMessage(LanguageSystem.SYSTEM_DEBUG, "IV HAS DETECTED THAT ENTITY CULLING MOD IS PRESENT.  THIS MOD CULLS ALL IV VEHICLES UNLESS \"mts:builder_existing\", \"mts:builder_rendering\", AND \"mts:builder_seat\" ARE ADDED TO THE WHITELIST.");
+                                }
+                                if (InterfaceManager.coreInterface.isModPresent("modernfix")) {
+                                    player.displayChatMessage(LanguageSystem.SYSTEM_DEBUG, "IV HAS DETECTED THAT MODERNFIX MOD IS PRESENT.  IF DYNAMIC RESOURCES IS SET TO TRUE IV ITEMS WILL NOT RENDER PROPERLY.");
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    world.tickAll(false);
+
+                    //Handle camera requests.
+                    if (cameraModeRequest != null) {
+                        switch (cameraModeRequest) {
+                            case FIRST_PERSON: {
+                                MinecraftClient.getInstance().options.setPerspective(Perspective.FIRST_PERSON);
+                                break;
+                            }
+                            case THIRD_PERSON: {
+                                MinecraftClient.getInstance().options.setPerspective(Perspective.THIRD_PERSON_BACK);
+                                break;
+                            }
+                            case THIRD_PERSON_INVERTED: {
+                                MinecraftClient.getInstance().options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+                                break;
+                            }
+                        }
+                        cameraModeRequest = null;
+                    }
+
+                    //Update camera state, since this can change depending on tick if we check during renders.
+                    Perspective cameraModeEnum = MinecraftClient.getInstance().options.getPerspective();
+                    switch (cameraModeEnum) {
+                        case FIRST_PERSON: {
+                            actualCameraMode = CameraMode.FIRST_PERSON;
+                            break;
+                        }
+                        case THIRD_PERSON_BACK: {
+                            actualCameraMode = CameraMode.THIRD_PERSON;
+                            break;
+                        }
+                        case THIRD_PERSON_FRONT: {
+                            actualCameraMode = CameraMode.THIRD_PERSON_INVERTED;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     @Override
     public boolean isGamePaused() {
@@ -166,8 +250,6 @@ public class InterfaceClient implements IInterfaceClient {
         return mutablePosition;
     }
 
-    private static final Point3D mutablePosition = new Point3D();
-
     @Override
     public void playBlockBreakSound(Point3D position) {
         BlockPos pos = new BlockPos(position.x, position.y, position.z);
@@ -217,88 +299,5 @@ public class InterfaceClient implements IInterfaceClient {
             tooltipText.add(stringToAdd + component.getString());
         }
         return tooltipText;
-    }
-
-    /**
-     * Tick client-side entities like bullets and particles.
-     * These don't get ticked normally due to the world tick event
-     * not being called on clients.
-     */
-    @SubscribeEvent
-    public static void onIVClientTick(TickEvent.ClientTickEvent event) {
-        IWrapperPlayer player = InterfaceManager.clientInterface.getClientPlayer();
-        if (!InterfaceManager.clientInterface.isGamePaused() && player != null) {
-            AWrapperWorld world = InterfaceManager.clientInterface.getClientWorld();
-            if (world != null) {
-                if (event.phase.equals(Phase.START)) {
-                    if (!player.isSpectator()) {
-                        //Handle controls.  This has to happen prior to vehicle updates to ensure click handling is based on current position of the player.
-                        ControlSystem.controlGlobal(player);
-                        if (((WrapperPlayer) player).player.age % 100 == 0) {
-                            if (!InterfaceManager.clientInterface.isGUIOpen() && !PackParser.arePacksPresent()) {
-                                new GUIPackMissing();
-                            }
-                        }
-                    }
-
-                    //Need to update world brightness since sky darken isn't calculated normally on clients.
-                    ((WrapperWorld) world).world.calculateAmbientDarkness();
-
-                    world.tickAll(true);
-
-                    //Complain about compats at 10 second mark.
-                    if (ConfigSystem.settings.general.performModCompatFunctions.value) {
-                        if (ticksToCullingWarning > 0) {
-                            if (--ticksToCullingWarning == 0) {
-                                if (InterfaceManager.coreInterface.isModPresent("entityculling")) {
-                                    player.displayChatMessage(LanguageSystem.SYSTEM_DEBUG, "IV HAS DETECTED THAT ENTITY CULLING MOD IS PRESENT.  THIS MOD CULLS ALL IV VEHICLES UNLESS \"mts:builder_existing\", \"mts:builder_rendering\", AND \"mts:builder_seat\" ARE ADDED TO THE WHITELIST.");
-                                }
-                                if (InterfaceManager.coreInterface.isModPresent("modernfix")) {
-                                    player.displayChatMessage(LanguageSystem.SYSTEM_DEBUG, "IV HAS DETECTED THAT MODERNFIX MOD IS PRESENT.  IF DYNAMIC RESOURCES IS SET TO TRUE IV ITEMS WILL NOT RENDER PROPERLY.");
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    world.tickAll(false);
-
-                    //Handle camera requests.
-                    if (cameraModeRequest != null) {
-                        switch (cameraModeRequest) {
-                            case FIRST_PERSON: {
-                                MinecraftClient.getInstance().options.setPerspective(Perspective.FIRST_PERSON);
-                                break;
-                            }
-                            case THIRD_PERSON: {
-                                MinecraftClient.getInstance().options.setPerspective(Perspective.THIRD_PERSON_BACK);
-                                break;
-                            }
-                            case THIRD_PERSON_INVERTED: {
-                                MinecraftClient.getInstance().options.setPerspective(Perspective.THIRD_PERSON_FRONT);
-                                break;
-                            }
-                        }
-                        cameraModeRequest = null;
-                    }
-
-                    //Update camera state, since this can change depending on tick if we check during renders.
-                    Perspective cameraModeEnum = MinecraftClient.getInstance().options.getPerspective();
-                    switch (cameraModeEnum) {
-                        case FIRST_PERSON: {
-                            actualCameraMode = CameraMode.FIRST_PERSON;
-                            break;
-                        }
-                        case THIRD_PERSON_BACK: {
-                            actualCameraMode = CameraMode.THIRD_PERSON;
-                            break;
-                        }
-                        case THIRD_PERSON_FRONT: {
-                            actualCameraMode = CameraMode.THIRD_PERSON_INVERTED;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
     }
 }

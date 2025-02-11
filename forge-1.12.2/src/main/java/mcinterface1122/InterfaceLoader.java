@@ -1,6 +1,6 @@
 package mcinterface1122;
 
-import minecrafttransportsimulator.MtsVersion;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackParser;
 import minecrafttransportsimulator.systems.ConfigSystem;
@@ -26,11 +26,9 @@ import java.util.List;
  *
  * @author don_bruce
  */
-@Mod(modid = InterfaceLoader.MODID, name = InterfaceLoader.MODNAME, version = MtsVersion.VERSION)
+@Mod(modid = MtsInfo.MOD_ID, name = MtsInfo.MOD_NAME, version = MtsInfo.VERSION)
 public final class InterfaceLoader {
-    public static final String MODID = "mts";
-    public static final String MODNAME = "Immersive Vehicles (MTS)";
-    public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
+    public static final Logger LOGGER = LogManager.getLogger(MtsInfo.MOD_ID);
 
     @EventHandler
     public void modConstruction(FMLConstructionEvent event) {
@@ -45,12 +43,12 @@ public final class InterfaceLoader {
 
         //Init interfaces and send to the main game system.
         if (event.getSide().isClient()) {
-            new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), new InterfaceClient(), new InterfaceInput(), new InterfaceSound(), new InterfaceRender());
+            new InterfaceManager(gameDirectory, new InterfaceCore(), new InterfacePacket(), new InterfaceClient(), new InterfaceInput(), new InterfaceSound(), new InterfaceRender());
         } else {
-            new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
+            new InterfaceManager(gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
         }
 
-        LOGGER.info("Welcome to MTS VERSION:" + MtsVersion.VERSION);
+        LOGGER.info("Welcome to MTS VERSION:" + MtsInfo.VERSION);
 
         //Parse packs
         ConfigSystem.loadFromDisk(new File(gameDirectory, "config"), event.getSide().isClient());

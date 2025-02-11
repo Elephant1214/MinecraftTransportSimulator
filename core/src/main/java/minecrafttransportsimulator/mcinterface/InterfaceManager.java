@@ -17,7 +17,6 @@ import minecrafttransportsimulator.packloading.PackParser;
  * @author don_bruce
  */
 public class InterfaceManager {
-    public static String coreModID;
     public static String gameDirectory;
     public static IInterfaceCore coreInterface;
     public static IInterfacePacket packetInterface;
@@ -26,8 +25,7 @@ public class InterfaceManager {
     public static IInterfaceSound soundInterface;
     public static IInterfaceRender renderingInterface;
     
-    public InterfaceManager(String coreModID, String gameDirectory, IInterfaceCore coreInterface, IInterfacePacket packetInterface, IInterfaceClient clientInterface, IInterfaceInput inputInterface, IInterfaceSound soundInterface, IInterfaceRender renderingInterface) {
-        InterfaceManager.coreModID = coreModID;
+    public InterfaceManager(String gameDirectory, IInterfaceCore coreInterface, IInterfacePacket packetInterface, IInterfaceClient clientInterface, IInterfaceInput inputInterface, IInterfaceSound soundInterface, IInterfaceRender renderingInterface) {
         InterfaceManager.gameDirectory = gameDirectory;
         InterfaceManager.coreInterface = coreInterface;
         InterfaceManager.packetInterface = packetInterface;

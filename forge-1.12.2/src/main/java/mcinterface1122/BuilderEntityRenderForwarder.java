@@ -1,7 +1,7 @@
 package mcinterface1122;
 
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.baseclasses.Point3D;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
@@ -23,14 +23,13 @@ import net.minecraftforge.fml.common.registry.EntityEntryBuilder;
 @EventBusSubscriber
 public class BuilderEntityRenderForwarder extends ABuilderEntityBase {
     protected static BuilderEntityRenderForwarder lastClientInstance;
-
-    protected EntityPlayer playerFollowing;
-    private final long[] lastTickRendered = new long[]{0L, 0L, 0L};
-    private final float[] lastPartialTickRendered = new float[]{0F, 0F, 0F};
-    private boolean doneRenderingShaders;
     private static int framesShadersDetected;
     private static boolean shadersDetected;
     private static boolean renderPass21;
+    private final long[] lastTickRendered = new long[]{0L, 0L, 0L};
+    private final float[] lastPartialTickRendered = new float[]{0F, 0F, 0F};
+    protected EntityPlayer playerFollowing;
+    private boolean doneRenderingShaders;
 
     public BuilderEntityRenderForwarder(World world) {
         super(world);
@@ -44,6 +43,14 @@ public class BuilderEntityRenderForwarder extends ABuilderEntityBase {
         this(playerFollowing.world);
         this.playerFollowing = playerFollowing;
         this.setPosition(playerFollowing.posX, playerFollowing.posY, playerFollowing.posZ);
+    }
+
+    /**
+     * Registers our own class for use.
+     */
+    @SubscribeEvent
+    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
+        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityRenderForwarder.class).id(new ResourceLocation(MtsInfo.MOD_ID, "mts_entity_renderer"), 2).tracker(32 * 16, 5, false).name("mts_entity_renderer").build());
     }
 
     @Override
@@ -140,20 +147,12 @@ public class BuilderEntityRenderForwarder extends ABuilderEntityBase {
     }
 
     @Override
-    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
-        super.writeToNBT(tag);
+    public NBTTagCompound writeToNBT(NBTTagCompound compound) {
+        super.writeToNBT(compound);
         if (playerFollowing != null) {
             //Player valid, save it and return the modified tag.
-            tag.setUniqueId("playerFollowing", playerFollowing.getUniqueID());
+            compound.setUniqueId("playerFollowing", playerFollowing.getUniqueID());
         }
-        return tag;
-    }
-
-    /**
-     * Registers our own class for use.
-     */
-    @SubscribeEvent
-    public static void registerEntities(RegistryEvent.Register<EntityEntry> event) {
-        event.getRegistry().register(EntityEntryBuilder.create().entity(BuilderEntityRenderForwarder.class).id(new ResourceLocation(InterfaceManager.coreModID, "mts_entity_renderer"), 2).tracker(32 * 16, 5, false).name("mts_entity_renderer").build());
+        return compound;
     }
 }

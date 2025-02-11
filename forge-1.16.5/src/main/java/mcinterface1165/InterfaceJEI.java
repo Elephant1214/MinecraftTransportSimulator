@@ -11,10 +11,10 @@ import mezz.jei.api.ingredients.IIngredients;
 import mezz.jei.api.recipe.category.IRecipeCategory;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.items.components.AItemPack;
 import minecrafttransportsimulator.items.instances.ItemDecor;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackMaterialComponent;
 import minecrafttransportsimulator.packloading.PackParser;
 import net.minecraft.item.ItemStack;
@@ -30,13 +30,14 @@ import java.util.List;
  *
  * @author don_bruce
  */
+@SuppressWarnings("unused")
 @JeiPlugin
 public class InterfaceJEI implements IModPlugin {
     private static final List<BenchRecipeCategory> benchCategories = new ArrayList<>();
 
     @Override
     public @NotNull Identifier getPluginUid() {
-        return new Identifier(InterfaceManager.coreModID, "main");
+        return new Identifier(MtsInfo.MOD_ID, "main");
     }
 
     @Override
@@ -103,7 +104,7 @@ public class InterfaceJEI implements IModPlugin {
         private BenchRecipeCategory(ItemDecor benchItem, List<PackRecipeWrapper> benchRecipes, IGuiHelper guiHelper) {
             this.benchItem = benchItem;
             this.benchRecipes = benchRecipes;
-            this.background = guiHelper.createDrawable(new Identifier(InterfaceManager.coreModID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
+            this.background = guiHelper.createDrawable(new Identifier(MtsInfo.MOD_ID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
             this.icon = guiHelper.createDrawableIngredient(((WrapperItemStack) benchItem.getNewStack(null)).stack);
         }
 
@@ -114,7 +115,7 @@ public class InterfaceJEI implements IModPlugin {
 
         @Override
         public @NotNull Identifier getUid() {
-            return new Identifier(InterfaceManager.coreModID, benchItem.getRegistrationName());
+            return new Identifier(MtsInfo.MOD_ID, benchItem.getRegistrationName());
         }
 
         @Override

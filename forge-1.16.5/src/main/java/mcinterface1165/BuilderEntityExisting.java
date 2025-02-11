@@ -44,18 +44,11 @@ import java.util.Map;
  */
 @EventBusSubscriber
 public class BuilderEntityExisting extends ABuilderEntityBase {
-    public static RegistryObject<EntityType<BuilderEntityExisting>> E_TYPE2;
-    private EntityDimensions mutableDims = new EntityDimensions(1.0F, 1.0F, false);
-
     /**
      * Maps Entity class names to instances of the IItemEntityProvider class that creates them.
      **/
     protected static final Map<String, IItemEntityFactory> entityMap = new HashMap<>();
-
-    /**
-     * Current entity we are built around.  This MAY be null if we haven't loaded NBT from the server yet.
-     **/
-    protected AEntityB_Existing entity;
+    public static RegistryObject<EntityType<BuilderEntityExisting>> E_TYPE2;
     /**
      * Last saved explosion position (used for damage calcs).
      **/
@@ -65,12 +58,30 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
      **/
     public WrapperAABBCollective collisionBoxes;
     /**
+     * Current entity we are built around.  This MAY be null if we haven't loaded NBT from the server yet.
+     **/
+    protected AEntityB_Existing entity;
+    private EntityDimensions mutableDims = new EntityDimensions(1.0F, 1.0F, false);
+    /**
      * Collective for collision boxes.  These are used by this entity to make things interact and attack it.
      **/
     private WrapperAABBCollective interactAttackBoxes;
 
     public BuilderEntityExisting(EntityType<? extends BuilderEntityExisting> eType, World world) {
         super(eType, world);
+    }
+
+    /**
+     * We need to use explosion events here as we don't know where explosions occur in the world.
+     * This results in them being position-less, so we can't get the collision box they hit for damage.
+     * Whenever we have an explosion detonated in the world, save it's position.  We can then use it
+     * in {@link #damage(DamageSource, float)} to tell the system which part to attack.
+     */
+    @SubscribeEvent
+    public static void onIVExplode(ExplosionEvent.Detonate event) {
+        if (!event.getWorld().isClient) {
+            lastExplosionPosition = new Point3D(event.getExplosion().getPosition().x, event.getExplosion().getPosition().y, event.getExplosion().getPosition().z);
+        }
     }
 
     @Override
@@ -243,18 +254,5 @@ public class BuilderEntityExisting extends ABuilderEntityBase {
             tag.putString("entityid", this.entity.getClass().getSimpleName());
         }
         return tag;
-    }
-
-    /**
-     * We need to use explosion events here as we don't know where explosions occur in the world.
-     * This results in them being position-less, so we can't get the collision box they hit for damage.
-     * Whenever we have an explosion detonated in the world, save it's position.  We can then use it
-     * in {@link #damage(DamageSource, float)} to tell the system which part to attack.
-     */
-    @SubscribeEvent
-    public static void onIVExplode(ExplosionEvent.Detonate event) {
-        if (!event.getWorld().isClient) {
-            lastExplosionPosition = new Point3D(event.getExplosion().getPosition().x, event.getExplosion().getPosition().y, event.getExplosion().getPosition().z);
-        }
     }
 }

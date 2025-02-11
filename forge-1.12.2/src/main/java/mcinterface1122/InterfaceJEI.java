@@ -1,8 +1,5 @@
 package mcinterface1122;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import mezz.jei.api.IGuiHelper;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.IModRegistry;
@@ -15,14 +12,18 @@ import mezz.jei.api.ingredients.VanillaTypes;
 import mezz.jei.api.recipe.IRecipeCategory;
 import mezz.jei.api.recipe.IRecipeCategoryRegistration;
 import mezz.jei.api.recipe.IRecipeWrapper;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.items.components.AItemPack;
 import minecrafttransportsimulator.items.instances.ItemDecor;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackMaterialComponent;
 import minecrafttransportsimulator.packloading.PackParser;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Interface for the JEI system.  This is responsible for populating JEI with the various items,
@@ -30,12 +31,13 @@ import net.minecraft.util.ResourceLocation;
  *
  * @author don_bruce
  */
+@SuppressWarnings("unused")
 @JEIPlugin
 public class InterfaceJEI implements IModPlugin {
     private static final List<BenchRecipeCategory> benchCategories = new ArrayList<>();
 
     @Override
-    public void registerCategories(IRecipeCategoryRegistration registry) {
+    public void registerCategories(@NotNull IRecipeCategoryRegistration registry) {
         //Check all pack items for benches.
         benchCategories.clear();
         for (AItemPack<?> packItem : PackParser.getAllPackItems()) {
@@ -70,7 +72,7 @@ public class InterfaceJEI implements IModPlugin {
     }
 
     @Override
-    public void register(IModRegistry registry) {
+    public void register(@NotNull IModRegistry registry) {
         //Register all recipes in all benches.
         for (BenchRecipeCategory benchCategory : benchCategories) {
             registry.addRecipes(benchCategory.benchRecipes, benchCategory.getUid());
@@ -89,7 +91,7 @@ public class InterfaceJEI implements IModPlugin {
         }
 
         @Override
-        public void getIngredients(IIngredients ingredients) {
+        public void getIngredients(@NotNull IIngredients ingredients) {
             List<List<ItemStack>> inputs = new ArrayList<>();
             List<PackMaterialComponent> components = PackMaterialComponent.parseFromJSON(packItem, recipeIndex, true, true, forRepair, true);
             if (components != null) {
@@ -115,13 +117,13 @@ public class InterfaceJEI implements IModPlugin {
         private BenchRecipeCategory(ItemDecor benchItem, List<IRecipeWrapper> benchRecipes, IGuiHelper guiHelper) {
             this.benchItem = benchItem;
             this.benchRecipes = benchRecipes;
-            this.background = guiHelper.createDrawable(new ResourceLocation(InterfaceManager.coreModID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
+            this.background = guiHelper.createDrawable(new ResourceLocation(MtsInfo.MOD_ID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
             this.icon = guiHelper.createDrawableIngredient(((WrapperItemStack) benchItem.getNewStack(null)).stack);
         }
 
         @Override
         public String getUid() {
-            return InterfaceManager.coreModID + "." + benchItem.getRegistrationName();
+            return MtsInfo.MOD_ID + "." + benchItem.getRegistrationName();
         }
 
         @Override
@@ -145,11 +147,11 @@ public class InterfaceJEI implements IModPlugin {
         }
 
         @Override
-        public void setRecipe(IRecipeLayout recipeLayout, PackRecipeWrapper recipeWrapper, IIngredients ingredients) {
+        public void setRecipe(IRecipeLayout recipeLayout, @NotNull PackRecipeWrapper recipeWrapper, IIngredients ingredients) {
             //Get stack bits.
             IGuiItemStackGroup guiItemStacks = recipeLayout.getItemStacks();
 
-            //Set output.  (For some reason the position in the texture is off by 1px for JEI?
+            //Set output.  (For some reason the position in the texture is off by 1px for JEI?)
             guiItemStacks.init(0, false, 58, 70);
             guiItemStacks.set(0, ingredients.getOutputs(VanillaTypes.ITEM).get(0));
 

@@ -1,6 +1,6 @@
 package mcinterface1165;
 
-import minecrafttransportsimulator.MtsVersion;
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
 import minecrafttransportsimulator.blocks.instances.BlockCollision;
@@ -43,12 +43,9 @@ import java.util.Map.Entry;
  *
  * @author don_bruce
  */
-@Mod(InterfaceLoader.MODID)
+@Mod(MtsInfo.MOD_ID)
 public class InterfaceLoader {
-    public static final String MODID = "mts";
-    public static final String MODNAME = "Immersive Vehicles (MTS)";
-
-    public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
+    public static final Logger LOGGER = LogManager.getLogger(MtsInfo.MOD_ID);
     private final String gameDirectory;
 
 
@@ -76,13 +73,13 @@ public class InterfaceLoader {
 
         //Init interfaces and send to the main game system.
         if (isClient) {
-            new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), new InterfaceClient(), new InterfaceInput(), new InterfaceSound(), new InterfaceRender());
+            new InterfaceManager(gameDirectory, new InterfaceCore(), new InterfacePacket(), new InterfaceClient(), new InterfaceInput(), new InterfaceSound(), new InterfaceRender());
             FMLJavaModLoadingContext.get().getModEventBus().addListener(InterfaceRender::registerRenderer);
         } else {
-            new InterfaceManager(MODID, gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
+            new InterfaceManager(gameDirectory, new InterfaceCore(), new InterfacePacket(), null, null, null, null);
         }
 
-        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MtsVersion.VERSION);
+        InterfaceManager.coreInterface.logError("Welcome to MTS VERSION: " + MtsInfo.VERSION);
 
         //Parse packs
         ConfigSystem.loadFromDisk(new File(gameDirectory, "config"), isClient);
@@ -109,7 +106,7 @@ public class InterfaceLoader {
                     //Check if the creative tab is set/created.
                     //The only except is for "invisible" parts of the core mod, these are internal.
                     boolean hideOnCreativeTab = item.definition.general.hideOnCreativeTab || (item instanceof AItemSubTyped && ((AItemSubTyped<?>) item).subDefinition.hideOnCreativeTab);
-                    if (!hideOnCreativeTab && (!item.definition.packID.equals(InterfaceManager.coreModID) || !item.definition.systemName.contains("invisible"))) {
+                    if (!hideOnCreativeTab && (!item.definition.packID.equals(MtsInfo.MOD_ID) || !item.definition.systemName.contains("invisible"))) {
                         String tabID = item.getCreativeTabID();
                         if (!BuilderCreativeTab.createdTabs.containsKey(tabID)) {
                             JSONPack packConfiguration = PackParser.getPackConfiguration(tabID);

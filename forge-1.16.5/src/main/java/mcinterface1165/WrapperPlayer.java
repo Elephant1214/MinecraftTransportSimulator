@@ -30,6 +30,11 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
 
     protected final PlayerEntity player;
 
+    protected WrapperPlayer(PlayerEntity player) {
+        super(player);
+        this.player = player;
+    }
+
     /**
      * Returns a wrapper instance for the passed-in player instance.
      * Null may be passed-in safely to ease function-forwarding.
@@ -51,9 +56,16 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
         }
     }
 
-    protected WrapperPlayer(PlayerEntity player) {
-        super(player);
-        this.player = player;
+    /**
+     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
+     */
+    @SubscribeEvent
+    public static void onIVWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld().isClient()) {
+            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        } else {
+            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        }
     }
 
     @Override
@@ -160,17 +172,5 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
                 return true;
             }
         }, LiteralText.EMPTY));
-    }
-
-    /**
-     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
-     */
-    @SubscribeEvent
-    public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isClient()) {
-            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        } else {
-            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        }
     }
 }

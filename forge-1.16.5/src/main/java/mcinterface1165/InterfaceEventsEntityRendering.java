@@ -38,16 +38,16 @@ import org.lwjgl.glfw.GLFW;
  */
 @EventBusSubscriber(Dist.CLIENT)
 public class InterfaceEventsEntityRendering {
-    private static boolean needToPopMatrix = false;
-    private static ItemStack heldStackHolder = null;
-    private static final Point3D entityScale = new Point3D();
-    private static final RotationMatrix riderBodyOrientation = new RotationMatrix();
-    private static float riderStoredHeadRot;
-    private static float riderStoredHeadRotO;
-    private static final TransformationMatrix riderTotalTransformation = new TransformationMatrix();
     public static final Point3D cameraAdjustedPosition = new Point3D();
     public static final RotationMatrix cameraAdjustedOrientation = new RotationMatrix();
+    private static final Point3D entityScale = new Point3D();
+    private static final RotationMatrix riderBodyOrientation = new RotationMatrix();
+    private static final TransformationMatrix riderTotalTransformation = new TransformationMatrix();
     public static boolean adjustedCamera;
+    private static boolean needToPopMatrix = false;
+    private static ItemStack heldStackHolder = null;
+    private static float riderStoredHeadRot;
+    private static float riderStoredHeadRotO;
     private static PlayerEntity mcPlayer;
 
     private static int lastScreenWidth;

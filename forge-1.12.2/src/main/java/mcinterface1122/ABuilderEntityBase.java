@@ -1,14 +1,15 @@
 package mcinterface1122;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Builder for a basic MC Entity class.  This builder provides basic entity logic that's common
@@ -18,10 +19,11 @@ import net.minecraft.world.World;
  */
 public abstract class ABuilderEntityBase extends Entity {
     /**
-     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
+     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
+     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
+     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
      **/
-    private boolean needDataFromServer = true;
-    private int ticksWaitedForServerData;
+    public final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
     /**
      * Data loaded on last NBT call.  Saved here to prevent loading of things until the update method.  This prevents
      * loading entity data when this entity isn't being ticked.  Some mods love to do this by making a lot of entities
@@ -41,16 +43,15 @@ public abstract class ABuilderEntityBase extends Entity {
      **/
     public boolean loadedFromSavedNBT;
     /**
-     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
-     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
-     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
-     **/
-    public final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
-    /**
      * An idle tick counter.  This is set to 0 each time the update method is called, but is incremented each game tick.
      * This allows us to track how long this entity has been idle, and do logic if it's been idle too long.
      **/
     public int idleTickCounter;
+    /**
+     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
+     **/
+    private boolean needDataFromServer = true;
+    private int ticksWaitedForServerData;
 
     public ABuilderEntityBase(World world) {
         super(world);
@@ -126,22 +127,22 @@ public abstract class ABuilderEntityBase extends Entity {
     }
 
     @Override
-    public void readFromNBT(NBTTagCompound tag) {
-        super.readFromNBT(tag);
+    public void readFromNBT(@NotNull NBTTagCompound compound) {
+        super.readFromNBT(compound);
         //Save the NBT for loading in the next update call.
-        lastLoadedNBT = tag;
+        lastLoadedNBT = compound;
     }
 
     @Override
-    public NBTTagCompound writeToNBT(NBTTagCompound tag) {
-        super.writeToNBT(tag);
+    public NBTTagCompound writeToNBT(NBTTagCompound compound) {
+        super.writeToNBT(compound);
         //Need to have this here as some mods will load us from NBT and then save us back
         //without ticking.  This causes data loss if we don't merge the last loaded NBT tag.
         //If we did tick, then the last loaded will be null and this doesn't apply.
         if (lastLoadedNBT != null) {
-            tag.merge(lastLoadedNBT);
+            compound.merge(lastLoadedNBT);
         }
-        return tag;
+        return compound;
     }
 
     //Junk methods, forced to pull in.
@@ -150,10 +151,10 @@ public abstract class ABuilderEntityBase extends Entity {
     }
 
     @Override
-    protected void readEntityFromNBT(NBTTagCompound p_70037_1_) {
+    protected void readEntityFromNBT(@NotNull NBTTagCompound compound) {
     }
 
     @Override
-    protected void writeEntityToNBT(NBTTagCompound p_70014_1_) {
+    protected void writeEntityToNBT(@NotNull NBTTagCompound compound) {
     }
 }

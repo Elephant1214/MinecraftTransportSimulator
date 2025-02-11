@@ -1,21 +1,6 @@
 package mcinterface1122;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import org.lwjgl.opengl.GL11;
-
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.entities.components.AEntityC_Renderable;
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.items.components.AItemPack;
@@ -44,6 +29,17 @@ import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
+import org.lwjgl.opengl.GL11;
+
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Interface for handling events pertaining to loading models into MC.  These events are mainly for item models,
@@ -149,7 +145,7 @@ public class InterfaceEventsModelLoader {
 
         //Now that we have the custom resource pack location, add our built-in loader.
         //This one auto-generates item JSONs.
-        defaultPacks.add(new PackResourcePack(InterfaceManager.coreModID + "_packs"));
+        defaultPacks.add(new PackResourcePack(MtsInfo.MOD_ID + "_packs"));
 
         //Now register items for the packs.
         //When we register a pack item from an external pack, we'll need to make a resource loader for it.
@@ -160,7 +156,7 @@ public class InterfaceEventsModelLoader {
                 if (!PackResourcePack.createdLoaders.containsKey(packItem.definition.packID)) {
                     defaultPacks.add(new PackResourcePack(packItem.definition.packID));
                 }
-                ModelLoader.setCustomModelResourceLocation(BuilderItem.itemMap.get(packItem), 0, new ModelResourceLocation(InterfaceManager.coreModID + "_packs:" + packItem.getRegistrationName(), "inventory"));
+                ModelLoader.setCustomModelResourceLocation(BuilderItem.itemMap.get(packItem), 0, new ModelResourceLocation(MtsInfo.MOD_ID + "_packs:" + packItem.getRegistrationName(), "inventory"));
             }
         }
 

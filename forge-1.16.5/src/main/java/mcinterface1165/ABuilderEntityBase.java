@@ -1,5 +1,6 @@
 package mcinterface1165;
 
+import minecrafttransportsimulator.MtsInfo;
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
@@ -23,13 +24,14 @@ import java.util.List;
  */
 //Need to extend LivingEntity since spawn syncing packets don't work with the base Entity class.
 public abstract class ABuilderEntityBase extends Entity {
-    protected static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITIES, InterfaceLoader.MODID);
+    protected static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITIES, MtsInfo.MOD_ID);
     protected static EntityType<ABuilderEntityBase> E_TYPE;
-
     /**
-     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
+     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
+     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
+     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
      **/
-    private boolean needDataFromServer = true;
+    public final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
     /**
      * Data loaded on last NBT call.  Saved here to prevent loading of things until the update method.  This prevents
      * loading entity data when this entity isn't being ticked.  Some mods love to do this by making a lot of entities
@@ -49,16 +51,14 @@ public abstract class ABuilderEntityBase extends Entity {
      **/
     public boolean loadedFromSavedNBT;
     /**
-     * Players requesting data for this builder.  This is populated by packets sent to the server.  Each tick players in this list are
-     * sent data about this builder, and the list cleared.  Done this way to prevent the server from trying to handle the packet before
-     * it has created the entity, as the entity is created on the update call, but the packet might get here due to construction.
-     **/
-    public final List<IWrapperPlayer> playersRequestingData = new ArrayList<>();
-    /**
      * An idle tick counter.  This is set to 0 each time the update method is called, but is incremented each game tick.
      * This allows us to track how long this entity has been idle, and do logic if it's been idle too long.
      **/
     public int idleTickCounter;
+    /**
+     * This flag is true if we need to get server data for syncing.  Set on construction tick, but only used on clients.
+     **/
+    private boolean needDataFromServer = true;
 
     public ABuilderEntityBase(World world) {
         super(E_TYPE, world);
@@ -98,11 +98,11 @@ public abstract class ABuilderEntityBase extends Entity {
             if (!this.playersRequestingData.isEmpty()) {
                 IWrapperNBT data = InterfaceManager.coreInterface.getNewNBTWrapper();
                 writeNbt(((WrapperNBT) data).tag);
-                
+
                 for (IWrapperPlayer player : this.playersRequestingData) {
                     player.sendPacket(new PacketEntityCSHandshakeServer(this, data));
                 }
-                
+
                 this.playersRequestingData.clear();
             }
         }

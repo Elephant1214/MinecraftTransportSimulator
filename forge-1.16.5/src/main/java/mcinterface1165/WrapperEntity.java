@@ -42,7 +42,21 @@ public class WrapperEntity implements IWrapperEntity {
     private static final Map<Entity, WrapperEntity> entityServerWrappers = new HashMap<>();
 
     protected final Entity entity;
+    private final Point3D mutablePosition = new Point3D();
+    private final Point3D mutableVelocity = new Point3D();
+    private final RotationMatrix mutableOrientation = new RotationMatrix();
+    private final Point3D mutableSight = new Point3D();
+    private final BoundingBox mutableBounds = new BoundingBox(new Point3D(), 0, 0, 0);
     private AEntityB_Existing cachedEntityRiding;
+    private float lastPitchChecked;
+    private float lastYawChecked;
+    private float lastYawApplied;
+    private float lastPitch;
+    private float lastYaw;
+
+    protected WrapperEntity(Entity entity) {
+        this.entity = entity;
+    }
 
     /**
      * Returns a wrapper instance for the passed-in entity instance.
@@ -66,8 +80,16 @@ public class WrapperEntity implements IWrapperEntity {
         }
     }
 
-    protected WrapperEntity(Entity entity) {
-        this.entity = entity;
+    /**
+     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
+     */
+    @SubscribeEvent
+    public static void onIVWorldUnload(WorldEvent.Unload event) {
+        if (event.getWorld().isClient()) {
+            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        } else {
+            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
+        }
     }
 
     @Override
@@ -200,8 +222,6 @@ public class WrapperEntity implements IWrapperEntity {
         return this.mutablePosition;
     }
 
-    private final Point3D mutablePosition = new Point3D();
-
     @Override
     public Point3D getEyePosition() {
         AEntityB_Existing riding = getEntityRiding();
@@ -240,8 +260,6 @@ public class WrapperEntity implements IWrapperEntity {
         return this.mutableVelocity;
     }
 
-    private final Point3D mutableVelocity = new Point3D();
-
     @Override
     public void setVelocity(Point3D motion) {
         this.entity.setVelocity(motion.x, motion.y, motion.z);
@@ -257,11 +275,6 @@ public class WrapperEntity implements IWrapperEntity {
         }
         return this.mutableOrientation;
     }
-
-    private final RotationMatrix mutableOrientation = new RotationMatrix();
-    private float lastPitchChecked;
-    private float lastYawChecked;
-    private float lastYawApplied;
 
     @Override
     public void setOrientation(RotationMatrix rotation) {
@@ -289,17 +302,25 @@ public class WrapperEntity implements IWrapperEntity {
     }
 
     @Override
+    public void setPitch(double pitch) {
+        this.entity.pitch = (float) pitch;
+    }
+
+    @Override
     public float getPitchDelta() {
         float value = this.entity.pitch - this.lastPitch;
         this.lastPitch = this.entity.pitch;
         return value;
     }
 
-    private float lastPitch;
-
     @Override
     public float getYaw() {
         return -this.entity.yaw;
+    }
+
+    @Override
+    public void setYaw(double yaw) {
+        this.entity.yaw = (float) -yaw;
     }
 
     @Override
@@ -309,24 +330,9 @@ public class WrapperEntity implements IWrapperEntity {
         return -value;
     }
 
-    private float lastYaw;
-
     @Override
     public float getBodyYaw() {
         return this.entity instanceof LivingEntity ? -((LivingEntity) this.entity).bodyYaw : 0;
-    }
-
-    @Override
-    public Point3D getLineOfSight(double distance) {
-        mutableSight.set(0, 0, distance).rotate(getOrientation());
-        return mutableSight;
-    }
-
-    private final Point3D mutableSight = new Point3D();
-
-    @Override
-    public void setYaw(double yaw) {
-        this.entity.yaw = (float) -yaw;
     }
 
     @Override
@@ -337,8 +343,9 @@ public class WrapperEntity implements IWrapperEntity {
     }
 
     @Override
-    public void setPitch(double pitch) {
-        this.entity.pitch = (float) pitch;
+    public Point3D getLineOfSight(double distance) {
+        mutableSight.set(0, 0, distance).rotate(getOrientation());
+        return mutableSight;
     }
 
     @Override
@@ -349,8 +356,6 @@ public class WrapperEntity implements IWrapperEntity {
         this.mutableBounds.globalCenter.set(this.entity.getX(), this.entity.getY() + this.mutableBounds.heightRadius, this.entity.getZ());
         return mutableBounds;
     }
-
-    private final BoundingBox mutableBounds = new BoundingBox(new Point3D(), 0, 0, 0);
 
     @Override
     public IWrapperNBT getData() {
@@ -447,18 +452,6 @@ public class WrapperEntity implements IWrapperEntity {
             } else {
                 throw new NullPointerException("Potion " + effect.name + " does not exist.");
             }
-        }
-    }
-
-    /**
-     * Remove all entities from our maps if we unload the world.  This will cause duplicates if we don't.
-     */
-    @SubscribeEvent
-    public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isClient()) {
-            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
-        } else {
-            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         }
     }
 }

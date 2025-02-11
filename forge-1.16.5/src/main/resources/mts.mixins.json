@@ -3,20 +3,19 @@
     "minVersion": "0.8",
     "package": "mcinterface1165.mixin",
     "compatibilityLevel": "JAVA_8",
-		"mixins": [
-				"common.ConcretePowderBlockMixin",
-				"common.EntityMixin"
-		],
+    "mixins": [
+        "common.ConcretePowderBlockMixin",
+        "common.EntityMixin"
+    ],
     "client": [
-        "client.RenderInfoInvokerMixin",
-        "client.ClientPlayNetworkHandlerMixin",
-				"client.LanguageManagerMixin",
-        "client.SoundListenerMixin",
-        "client.ReloadableResourceManagerImplMixin",
         "client.BipedEntityModelMixin",
+        "client.ClientPlayNetworkHandlerMixin",
+        "client.LanguageManagerMixin",
+        "client.ReloadableResourceManagerImplMixin",
+        "client.RenderInfoInvokerMixin",
+        "client.SoundListenerMixin",
         "client.VillagerResemblingModelMixin",
-				"client.WorldRendererMixin",
-				"client.MinecraftMixin"
+        "client.WorldRendererMixin"
     ],
     "injectors": {
         "defaultRequire": 1
