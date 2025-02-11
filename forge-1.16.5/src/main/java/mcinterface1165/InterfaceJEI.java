@@ -1,8 +1,5 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.constants.VanillaTypes;
@@ -21,7 +18,11 @@ import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackMaterialComponent;
 import minecrafttransportsimulator.packloading.PackParser;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.Identifier;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Interface for the JEI system.  This is responsible for populating JEI with the various items,
@@ -34,12 +35,12 @@ public class InterfaceJEI implements IModPlugin {
     private static final List<BenchRecipeCategory> benchCategories = new ArrayList<>();
 
     @Override
-    public ResourceLocation getPluginUid() {
-        return new ResourceLocation(InterfaceManager.coreModID, "main");
+    public @NotNull Identifier getPluginUid() {
+        return new Identifier(InterfaceManager.coreModID, "main");
     }
 
     @Override
-    public void registerCategories(IRecipeCategoryRegistration registry) {
+    public void registerCategories(@NotNull IRecipeCategoryRegistration registry) {
         //Check all pack items for benches.
         benchCategories.clear();
         for (AItemPack<?> packItem : PackParser.getAllPackItems()) {
@@ -70,11 +71,11 @@ public class InterfaceJEI implements IModPlugin {
         }
 
         //Register all benches.
-        registry.addRecipeCategories(benchCategories.toArray(new IRecipeCategory[benchCategories.size()]));
+        registry.addRecipeCategories(benchCategories.toArray(new IRecipeCategory[0]));
     }
 
     @Override
-    public void registerRecipes(IRecipeRegistration registration) {
+    public void registerRecipes(@NotNull IRecipeRegistration registration) {
         //Register all recipes in all benches.
         for (BenchRecipeCategory benchCategory : benchCategories) {
             registration.addRecipes(benchCategory.benchRecipes, benchCategory.getUid());
@@ -102,38 +103,37 @@ public class InterfaceJEI implements IModPlugin {
         private BenchRecipeCategory(ItemDecor benchItem, List<PackRecipeWrapper> benchRecipes, IGuiHelper guiHelper) {
             this.benchItem = benchItem;
             this.benchRecipes = benchRecipes;
-            this.background = guiHelper.createDrawable(new ResourceLocation(InterfaceManager.coreModID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
+            this.background = guiHelper.createDrawable(new Identifier(InterfaceManager.coreModID, "textures/guis/jei_crafting.png"), 0, 0, 134, 97);
             this.icon = guiHelper.createDrawableIngredient(((WrapperItemStack) benchItem.getNewStack(null)).stack);
         }
 
         @Override
-        public Class<PackRecipeWrapper> getRecipeClass() {
+        public @NotNull Class<PackRecipeWrapper> getRecipeClass() {
             return PackRecipeWrapper.class;
         }
 
         @Override
-        public ResourceLocation getUid() {
-            return new ResourceLocation(InterfaceManager.coreModID, benchItem.getRegistrationName());
+        public @NotNull Identifier getUid() {
+            return new Identifier(InterfaceManager.coreModID, benchItem.getRegistrationName());
         }
 
-        @SuppressWarnings("deprecation")
         @Override
-        public String getTitle() {
+        public @NotNull String getTitle() {
             return benchItem.getItemName();
         }
 
         @Override
-        public IDrawable getBackground() {
+        public @NotNull IDrawable getBackground() {
             return background;
         }
 
         @Override
-        public IDrawable getIcon() {
+        public @NotNull IDrawable getIcon() {
             return icon;
         }
 
         @Override
-        public void setIngredients(PackRecipeWrapper recipe, IIngredients ingredients) {
+        public void setIngredients(PackRecipeWrapper recipe, @NotNull IIngredients ingredients) {
             List<PackMaterialComponent> components = PackMaterialComponent.parseFromJSON(recipe.packItem, recipe.recipeIndex, true, true, recipe.forRepair, true);
             if (components != null) {
                 List<List<ItemStack>> inputs = new ArrayList<>();
@@ -150,7 +150,7 @@ public class InterfaceJEI implements IModPlugin {
         }
 
         @Override
-        public void setRecipe(IRecipeLayout recipeLayout, PackRecipeWrapper recipeWrapper, IIngredients ingredients) {
+        public void setRecipe(IRecipeLayout recipeLayout, @NotNull PackRecipeWrapper recipeWrapper, IIngredients ingredients) {
             //Get stack bits.
             IGuiItemStackGroup guiItemStacks = recipeLayout.getItemStacks();
 

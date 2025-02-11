@@ -1,20 +1,5 @@
 package mcinterface1165;
 
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.lwjgl.BufferUtils;
-import org.lwjgl.openal.AL10;
-import org.lwjgl.openal.ALC;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.entities.instances.EntityRadio;
 import minecrafttransportsimulator.mcinterface.IInterfaceSound;
@@ -32,6 +17,14 @@ import net.minecraftforge.event.TickEvent.Phase;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.ALC;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
+import java.util.*;
 
 /**
  * Interface for the sound system.  This is responsible for playing sound from vehicles/interactions.
@@ -84,6 +77,7 @@ public class InterfaceSound implements IInterfaceSound {
      */
     public static void update() {
         if (ALC.getFunctionProvider() == null) {
+            System.out.println("OpenAL instance is null");
             //Don't go any further if OpenAL isn't ready.
             return;
         }
@@ -449,7 +443,7 @@ public class InterfaceSound implements IInterfaceSound {
      */
     @SubscribeEvent
     public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isClientSide()) {
+        if (event.getWorld().isClient()) {
             queuedSounds.removeIf(soundInstance -> event.getWorld() == ((WrapperWorld) soundInstance.entity.world).world);
             for (SoundInstance sound : playingSounds) {
                 if (event.getWorld() == ((WrapperWorld) sound.entity.world).world) {

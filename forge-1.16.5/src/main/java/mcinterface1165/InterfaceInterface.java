@@ -2,11 +2,13 @@ package mcinterface1165;
 
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
 import minecrafttransportsimulator.entities.components.AEntityB_Existing;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -33,8 +35,8 @@ public class InterfaceInterface {
     }
 
     public static BuilderEntityExisting toExternal(AEntityB_Existing entity) {
-        if (((WrapperWorld) entity.world).world instanceof net.minecraft.world.server.ServerWorld) {
-            for (Entity mcEntity : ((net.minecraft.world.server.ServerWorld) ((WrapperWorld) entity.world).world).getAllEntities()) {
+        if (((WrapperWorld) entity.world).world instanceof ServerWorld) {
+            for (Entity mcEntity : ((ServerWorld) ((WrapperWorld) entity.world).world).iterateEntities()) {
                 if (mcEntity instanceof BuilderEntityExisting) {
                     if (entity.equals(((BuilderEntityExisting) mcEntity).entity)) {
                         return (BuilderEntityExisting) mcEntity;
@@ -42,7 +44,7 @@ public class InterfaceInterface {
                 }
             }
         } else {
-            for (Entity mcEntity : ((net.minecraft.client.world.ClientWorld) ((WrapperWorld) entity.world).world).entitiesForRendering()) {
+            for (Entity mcEntity : ((ClientWorld) ((WrapperWorld) entity.world).world).getEntities()) {
                 if (mcEntity instanceof BuilderEntityExisting) {
                     if (entity.equals(((BuilderEntityExisting) mcEntity).entity)) {
                         return (BuilderEntityExisting) mcEntity;
@@ -77,15 +79,15 @@ public class InterfaceInterface {
         return player.player;
     }
 
-    public static WrapperNBT toInternal(CompoundNBT tag) {
+    public static WrapperNBT toInternal(NbtCompound tag) {
         return new WrapperNBT(tag);
     }
 
-    public static CompoundNBT toExternal(WrapperNBT data) {
+    public static NbtCompound toExternal(WrapperNBT data) {
         return data.tag;
     }
 
-    public static WrapperInventory toInternal(IInventory inventory) {
+    public static WrapperInventory toInternal(Inventory inventory) {
         return new WrapperInventory(inventory);
     }
 

@@ -1,20 +1,20 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.items.components.AItemPack;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.NonNullList;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.Text;
+import net.minecraft.util.collection.DefaultedList;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Builder for a MC creative tabs.  This class interfaces with the MC creative tab system,
@@ -45,41 +45,42 @@ public class BuilderCreativeTab extends ItemGroup {
      * Adds the passed-in item to this tab.
      */
     public void addItem(AItemBase item, BuilderItem mcItem) {
-        items.add(mcItem);
+        this.items.add(mcItem);
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public ITextComponent getDisplayName() {
-        return new StringTextComponent(label);
+    public Text getTranslationKey() {
+        return new LiteralText(label);
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public ItemStack makeIcon() {
-        return tabItem != null ? new ItemStack(BuilderItem.itemMap.get(tabItem)) : null;
+    public ItemStack createIcon() {
+        return this.tabItem != null ? new ItemStack(BuilderItem.itemMap.get(this.tabItem)) : null;
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public ItemStack getIconItem() {
-        if (tabItem != null) {
-            return super.getIconItem();
+    public ItemStack getIcon() {
+        if (this.tabItem != null) {
+            return super.getIcon();
         } else {
-            return new ItemStack(items.get((int) (System.currentTimeMillis() / 1000 % items.size())));
+            int randomIcon = (int) System.currentTimeMillis() / 1000 % this.items.size();
+            return new ItemStack(this.items.get(randomIcon));
         }
     }
 
     @Override
     @OnlyIn(Dist.CLIENT)
-    public void fillItemList(NonNullList<ItemStack> givenList) {
+    public void appendStacks(DefaultedList<ItemStack> givenList) {
         //This is needed to re-sort the items here to get them in the correct order.
         //MC will re-order these by ID if we let it.  To prevent this, we swap MC's
         //internal list with our own, which ensures that the order is the order
         //we did registration in.
         givenList.clear();
-        for (Item item : items) {
-            item.fillItemCategory(this, givenList);
+        for (Item item : this.items) {
+            item.appendStacks(this, givenList);
         }
     }
 }

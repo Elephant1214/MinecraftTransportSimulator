@@ -1,31 +1,27 @@
 package mcinterface1165;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.items.instances.ItemItem;
 import minecrafttransportsimulator.jsondefs.JSONItem.ItemComponentType;
-import minecrafttransportsimulator.mcinterface.IWrapperEntity;
-import minecrafttransportsimulator.mcinterface.IWrapperInventory;
-import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.components.APacketBase;
 import minecrafttransportsimulator.systems.LanguageSystem.LanguageEntry;
-import net.minecraft.client.Minecraft;
-import net.minecraft.entity.MobEntity;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.container.SimpleNamedContainerProvider;
-import net.minecraft.inventory.container.WorkbenchContainer;
 import net.minecraft.item.Item;
-import net.minecraft.util.HandSide;
-import net.minecraft.util.IWorldPosCallable;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.screen.CraftingScreenHandler;
+import net.minecraft.screen.ScreenHandlerContext;
+import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
+import net.minecraft.text.LiteralText;
+import net.minecraft.util.Arm;
+import net.minecraft.util.math.Box;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @EventBusSubscriber
 public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
@@ -43,7 +39,7 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
      */
     public static WrapperPlayer getWrapperFor(PlayerEntity player) {
         if (player != null) {
-            Map<PlayerEntity, WrapperPlayer> playerWrappers = player.level.isClientSide ? playerClientWrappers : playerServerWrappers;
+            Map<PlayerEntity, WrapperPlayer> playerWrappers = player.world.isClient ? playerClientWrappers : playerServerWrappers;
             WrapperPlayer wrapper = playerWrappers.get(player);
             if (wrapper == null || !wrapper.isValid() || player != wrapper.player) {
                 wrapper = new WrapperPlayer(player);
@@ -75,39 +71,39 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
 
     @Override
     public boolean isOP() {
-        return player.getServer() == null || player.getServer().getPlayerList().getOps().get(player.getGameProfile()) != null || player.getServer().isSingleplayer();
+        return player.getServer() == null || player.getServer().getPlayerManager().getOpList().get(player.getGameProfile()) != null || player.getServer().isSinglePlayer();
     }
 
     @Override
     public void displayChatMessage(LanguageEntry language, Object... args) {
-        Minecraft.getInstance().gui.getChat().addMessage(new StringTextComponent(String.format(language.getCurrentValue(), args)));
+        MinecraftClient.getInstance().inGameHud.getChatHud().addMessage(new LiteralText(String.format(language.getCurrentValue(), args)));
     }
 
     @Override
     public boolean isCreative() {
-        return player.isCreative();
+        return this.player.isCreative();
     }
 
     @Override
     public boolean isSpectator() {
-        return player.isSpectator();
+        return this.player.isSpectator();
     }
 
     @Override
     public boolean isSneaking() {
-        return player.isCrouching();
+        return this.player.isInSneakingPose();
     }
 
     @Override
     public boolean isRightHanded() {
-        return player.getMainArm() == HandSide.RIGHT;
+        return this.player.getMainArm() == Arm.RIGHT;
     }
 
     @Override
     public IWrapperEntity getLeashedEntity() {
-        for (MobEntity mobEntity : player.level.getLoadedEntitiesOfClass(MobEntity.class, new AxisAlignedBB(player.position().x - 7.0D, player.position().y - 7.0D, player.position().z - 7.0D, player.position().x + 7.0D, player.position().y + 7.0D, player.position().z + 7.0D))) {
-            if (mobEntity.isLeashed() && player.equals(mobEntity.getLeashHolder())) {
-                mobEntity.dropLeash(true, !player.isCreative());
+        for (MobEntity mobEntity : this.player.world.getEntitiesIncludingUngeneratedChunks(MobEntity.class, new Box(this.player.getPos().x - 7.0D, this.player.getPos().y - 7.0D, this.player.getPos().z - 7.0D, this.player.getPos().x + 7.0D, this.player.getPos().y + 7.0D, this.player.getPos().z + 7.0D))) {
+            if (mobEntity.isLeashed() && this.player.equals(mobEntity.getHoldingEntity())) {
+                mobEntity.detachLeash(true, !this.player.isCreative());
                 return WrapperEntity.getWrapperFor(mobEntity);
             }
         }
@@ -122,31 +118,31 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
 
     @Override
     public AItemBase getHeldItem() {
-        Item heldItem = player.getMainHandItem().getItem();
+        Item heldItem = this.player.getActiveItem().getItem();
         return heldItem instanceof IBuilderItemInterface ? ((IBuilderItemInterface) heldItem).getWrappedItem() : null;
     }
 
     @Override
     public IWrapperItemStack getHeldStack() {
-        return new WrapperItemStack(player.inventory.getItem(getHotbarIndex()));
+        return new WrapperItemStack(this.player.inventory.getStack(getHotbarIndex()));
     }
 
     @Override
     public void setHeldStack(IWrapperItemStack stack) {
-        player.inventory.setItem(getHotbarIndex(), ((WrapperItemStack) stack).stack);
+        this.player.inventory.setStack(getHotbarIndex(), ((WrapperItemStack) stack).stack);
     }
 
     @Override
     public int getHotbarIndex() {
-        return player.inventory.selected;
+        return this.player.inventory.selectedSlot;
     }
 
     @Override
     public IWrapperInventory getInventory() {
-        return new WrapperInventory(player.inventory) {
+        return new WrapperInventory(this.player.inventory) {
             @Override
             public int getSize() {
-                return player.inventory.items.size();
+                return player.inventory.main.size();
             }
         };
     }
@@ -158,14 +154,12 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
 
     @Override
     public void openCraftingGUI() {
-        player.openMenu(new SimpleNamedContainerProvider((containerID, playerInventory, player) -> {
-            return new WorkbenchContainer(containerID, playerInventory, IWorldPosCallable.create(player.level, player.blockPosition())) {
-                @Override
-                public boolean stillValid(PlayerEntity pPlayer) {
-                    return true;
-                }
-            };
-        }, new StringTextComponent("")));
+        player.openHandledScreen(new SimpleNamedScreenHandlerFactory((containerID, playerInventory, player) -> new CraftingScreenHandler(containerID, playerInventory, ScreenHandlerContext.create(player.world, player.getBlockPos())) {
+            @Override
+            public boolean canUse(PlayerEntity pPlayer) {
+                return true;
+            }
+        }, LiteralText.EMPTY));
     }
 
     /**
@@ -173,10 +167,10 @@ public class WrapperPlayer extends WrapperEntity implements IWrapperPlayer {
      */
     @SubscribeEvent
     public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isClientSide()) {
-            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.level);
+        if (event.getWorld().isClient()) {
+            playerClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         } else {
-            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.level);
+            playerServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         }
     }
 }

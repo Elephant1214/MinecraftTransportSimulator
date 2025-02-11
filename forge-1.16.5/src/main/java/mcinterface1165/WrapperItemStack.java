@@ -1,7 +1,5 @@
 package mcinterface1165;
 
-import java.util.List;
-
 import minecrafttransportsimulator.entities.instances.EntityFluidTank;
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.mcinterface.AWrapperWorld;
@@ -11,9 +9,9 @@ import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.item.crafting.FurnaceRecipe;
-import net.minecraft.item.crafting.IRecipeType;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.recipe.RecipeType;
+import net.minecraft.recipe.SmeltingRecipe;
+import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.brewing.BrewingRecipeRegistry;
@@ -22,6 +20,8 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler.FluidAction;
 import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import java.util.List;
 
 public class WrapperItemStack implements IWrapperItemStack {
 
@@ -34,7 +34,7 @@ public class WrapperItemStack implements IWrapperItemStack {
     @Override
     public boolean isCompleteMatch(IWrapperItemStack other) {
         ItemStack otherStack = ((WrapperItemStack) other).stack;
-        return otherStack.sameItem(stack) && (otherStack.hasTag() ? otherStack.getTag().equals(stack.getTag()) : !stack.hasTag());
+        return otherStack.isItemEqualIgnoreDamage(this.stack) && (otherStack.hasTag() ? otherStack.getTag().equals(this.stack.getTag()) : !this.stack.hasTag());
     }
 
     @Override
@@ -45,55 +45,55 @@ public class WrapperItemStack implements IWrapperItemStack {
     @Override
     public IWrapperItemStack getSmeltedItem(AWrapperWorld world) {
         World mcWorld = ((WrapperWorld) world).world;
-        List<FurnaceRecipe> results = mcWorld.getRecipeManager().getAllRecipesFor(IRecipeType.SMELTING);
-        return new WrapperItemStack(results.isEmpty() ? ItemStack.EMPTY : results.get(0).getResultItem());
+        List<SmeltingRecipe> results = mcWorld.getRecipeManager().listAllOfType(RecipeType.SMELTING);
+        return new WrapperItemStack(results.isEmpty() ? ItemStack.EMPTY : results.get(0).getOutput());
     }
 
     @Override
     public int getSmeltingTime(AWrapperWorld world) {
         World mcWorld = ((WrapperWorld) world).world;
-        return mcWorld.getRecipeManager().getAllRecipesFor(IRecipeType.SMELTING).get(0).getCookingTime();
+        return mcWorld.getRecipeManager().listAllOfType(RecipeType.SMELTING).get(0).getCookTime();
     }
 
     @Override
     public boolean isBrewingFuel() {
-        return stack.getItem() == Items.BLAZE_POWDER;
+        return this.stack.getItem() == Items.BLAZE_POWDER;
     }
 
     @Override
     public boolean isBrewingVessel() {
-        return BrewingRecipeRegistry.isValidInput(stack);
+        return BrewingRecipeRegistry.isValidInput(this.stack);
     }
 
     @Override
     public boolean isBrewingModifier() {
-        return BrewingRecipeRegistry.isValidIngredient(stack);
+        return BrewingRecipeRegistry.isValidIngredient(this.stack);
     }
 
     @Override
     public IWrapperItemStack getBrewedItem(IWrapperItemStack modifierStack) {
-        return new WrapperItemStack(BrewingRecipeRegistry.getOutput(stack, ((WrapperItemStack) modifierStack).stack).copy());
+        return new WrapperItemStack(BrewingRecipeRegistry.getOutput(this.stack, ((WrapperItemStack) modifierStack).stack).copy());
     }
 
     @Override
     public AItemBase getItem() {
-        Item item = stack.getItem();
+        Item item = this.stack.getItem();
         return item instanceof IBuilderItemInterface ? ((IBuilderItemInterface) item).getWrappedItem() : null;
     }
 
     @Override
     public boolean isEmpty() {
-        return stack.isEmpty();
+        return this.stack.isEmpty();
     }
 
     @Override
     public int getSize() {
-        return stack.getCount();
+        return this.stack.getCount();
     }
 
     @Override
     public int getMaxSize() {
-        return stack.getMaxStackSize();
+        return this.stack.getMaxCount();
     }
 
     @Override
@@ -142,7 +142,7 @@ public class WrapperItemStack implements IWrapperItemStack {
             } else {
                 //Item can hold fluid.  Check if we can fill it.
                 //Need to find the mod that registered this fluid, Forge is stupid and has them per-mod vs just all with a single name.
-                for (ResourceLocation fluidKey : ForgeRegistries.FLUIDS.getKeys()) {
+                for (Identifier fluidKey : ForgeRegistries.FLUIDS.getKeys()) {
                     if ((tank.getFluidMod().equals(EntityFluidTank.WILDCARD_FLUID_MOD) || tank.getFluidMod().equals(fluidKey.getNamespace())) && fluidKey.getPath().equals(tank.getFluid())) {
                         FluidStack containedStack = new FluidStack(ForgeRegistries.FLUIDS.getValue(fluidKey), (int) tank.getFluidLevel());
                         int amountFilled = handler.fill(containedStack, player.isCreative() ? FluidAction.SIMULATE : FluidAction.EXECUTE);

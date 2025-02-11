@@ -3,8 +3,8 @@ package mcinterface1165;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
@@ -27,47 +27,47 @@ public class BuilderEntityRenderForwarder extends ABuilderEntityBase {
     }
 
     public BuilderEntityRenderForwarder(PlayerEntity playerFollowing) {
-        this(E_TYPE4.get(), playerFollowing.level);
+        this(E_TYPE4.get(), playerFollowing.world);
         this.playerFollowing = playerFollowing;
-        Vector3d playerPos = playerFollowing.position();
+        Vec3d playerPos = playerFollowing.getPos();
         this.setPos(playerPos.x, playerPos.y, playerPos.z);
     }
 
     @Override
     public void baseTick() {
         super.baseTick();
-        if (playerFollowing != null && playerFollowing.level == this.level && playerFollowing.isAlive()) {
+        if (this.playerFollowing != null && this.playerFollowing.world == this.world && this.playerFollowing.isAlive()) {
             //Need to move the fake entity forwards to account for the partial ticks interpolation MC does.
             //If we don't do this, and we move faster than 1 block per tick, we'll get flickering.
-            WrapperPlayer playerWrapper = WrapperPlayer.getWrapperFor(playerFollowing);
-            double playerVelocity = playerFollowing.getDeltaMovement().length();
+            WrapperPlayer playerWrapper = WrapperPlayer.getWrapperFor(this.playerFollowing);
+            double playerVelocity = this.playerFollowing.getVelocity().length();
             Point3D playerEyesVec = playerWrapper.getLineOfSight(Math.max(1, playerVelocity / 2));
             Point3D playerEyeOffset = new Point3D(0, 0.5, 0).rotate(playerWrapper.getOrientation()).add(playerWrapper.getPosition()).add(playerEyesVec);
             setPos(playerEyeOffset.x, playerEyeOffset.y + (playerWrapper.getEyeHeight() + playerWrapper.getSeatOffset()) * playerWrapper.getVerticalScale(), playerEyeOffset.z);
-        } else if (!level.isClientSide) {
+        } else if (!this.world.isClient) {
             //Don't restore saved entities on the server.
             //These get loaded, but might not tick if they're out of chunk range.
             remove();
-        } else if (!loadedFromSavedNBT && loadFromSavedNBT) {
+        } else if (!this.loadedFromSavedNBT && this.loadFromSavedNBT) {
             //Load player following from client NBT.
-            playerFollowing = level.getPlayerByUUID(lastLoadedNBT.getUUID("playerFollowing"));
-            loadedFromSavedNBT = true;
-            lastLoadedNBT = null;
+            this.playerFollowing = this.world.getPlayerByUuid(this.lastLoadedNBT.getUuid("playerFollowing"));
+            this.loadedFromSavedNBT = true;
+            this.lastLoadedNBT = null;
         }
     }
 
     @Override
-    public boolean shouldRenderAtSqrDistance(double pDistance) {
+    public boolean shouldRender(double pDistance) {
         //Need to render in pass 1 to render transparent things in the world like light beams.
         return true;
     }
 
     @Override
-    public CompoundNBT saveWithoutId(CompoundNBT tag) {
-        super.saveWithoutId(tag);
-        if (playerFollowing != null) {
+    public NbtCompound writeNbt(NbtCompound tag) {
+        super.writeNbt(tag);
+        if (this.playerFollowing != null) {
             //Player valid, save it and return the modified tag.
-            tag.putUUID("playerFollowing", playerFollowing.getUUID());
+            tag.putUuid("playerFollowing", this.playerFollowing.getUuid());
         }
         return tag;
     }

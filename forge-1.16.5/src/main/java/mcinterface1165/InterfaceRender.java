@@ -1,26 +1,7 @@
 package mcinterface1165;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import javax.imageio.ImageIO;
-
-import org.lwjgl.opengl.GL11;
-
-import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.IVertexBuilder;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.baseclasses.TransformationMatrix;
 import minecrafttransportsimulator.entities.components.AEntityC_Renderable;
@@ -34,33 +15,34 @@ import minecrafttransportsimulator.rendering.GIFParser.ParsedGIF;
 import minecrafttransportsimulator.rendering.RenderableData;
 import minecrafttransportsimulator.systems.ConfigSystem;
 import net.minecraft.block.BlockState;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.IRenderTypeBuffer;
-import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.RenderState;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.RenderType.State.Builder;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.culling.ClippingHelper;
-import net.minecraft.client.renderer.entity.EntityRenderer;
-import net.minecraft.client.renderer.entity.EntityRendererManager;
-import net.minecraft.client.renderer.texture.AtlasTexture;
-import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.client.renderer.texture.NativeImage;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
-import net.minecraft.client.renderer.vertex.VertexBuffer;
-import net.minecraft.client.renderer.vertex.VertexFormat;
-import net.minecraft.inventory.container.PlayerContainer;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.VertexBuffer;
+import net.minecraft.client.render.*;
+import net.minecraft.client.render.entity.EntityRenderDispatcher;
+import net.minecraft.client.render.entity.EntityRenderer;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.texture.Sprite;
+import net.minecraft.client.texture.SpriteAtlasTexture;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.screen.PlayerScreenHandler;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.vector.Matrix4f;
+import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.LightType;
 import net.minecraftforge.fml.client.registry.RenderingRegistry;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import org.lwjgl.opengl.GL11;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Interface for the various MC rendering engines.  This class has functions for
@@ -69,21 +51,21 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
  * @author don_bruce
  */
 public class InterfaceRender implements IInterfaceRender {
-    private static final Map<String, ResourceLocation> onlineTextures = new HashMap<>();
+    private static final Map<String, Identifier> onlineTextures = new HashMap<>();
     private static final Map<String, ParsedGIF> animatedGIFs = new HashMap<>();
-    private static final Map<ParsedGIF, Map<GIFImageFrame, ResourceLocation>> animatedGIFFrames = new LinkedHashMap<>();
+    private static final Map<ParsedGIF, Map<GIFImageFrame, Identifier>> animatedGIFFrames = new LinkedHashMap<>();
 
     private static final List<GUIComponentItem> stacksToRender = new ArrayList<>();
 
-    private static final Map<String, RenderType> renderTypes = new HashMap<>();
+    private static final Map<String, RenderLayer> renderTypes = new HashMap<>();
     private static final Map<RenderableData, BufferData> buffers = new HashMap<>();
-    private static final Map<RenderType, List<RenderData>> queuedRenders = new HashMap<>();
+    private static final Map<RenderLayer, List<RenderData>> queuedRenders = new HashMap<>();
     private static final ConcurrentLinkedQueue<BufferData> removedRenders = new ConcurrentLinkedQueue<>();
 
-    private static RenderState.TextureState MISSING_STATE;
-    private static RenderState.TextureState BLOCK_STATE;
+    private static RenderPhase.Texture MISSING_STATE;
+    private static RenderPhase.Texture BLOCK_STATE;
     private static MatrixStack matrixStack;
-    private static IRenderTypeBuffer renderBuffer;
+    private static VertexConsumerProvider renderBuffer;
     public static Point3D renderCameraOffset = new Point3D();
     private static boolean renderingGUI;
     private static float[] matrixConvertArray = new float[16];
@@ -93,15 +75,15 @@ public class InterfaceRender implements IInterfaceRender {
         //Get normal model.
         BlockPos pos = new BlockPos(position.x, position.y, position.z);
         BlockState state = ((WrapperWorld) world).world.getBlockState(pos);
-        TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getTexture(state, ((WrapperWorld) world).world, pos);
-        return new float[] { sprite.getU0(), sprite.getU1(), sprite.getV0(), sprite.getV1() };
+        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getTexture(state, ((WrapperWorld) world).world, pos);
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public float[] getDefaultBlockTexture(String name) {
-        TextureAtlasSprite sprite = Minecraft.getInstance().getBlockRenderer().getBlockModelShaper().getModelManager().getAtlas(AtlasTexture.LOCATION_BLOCKS).getSprite(new ResourceLocation(name.replace(":", ":blocks/")));
-        return new float[] { sprite.getU0(), sprite.getU1(), sprite.getV0(), sprite.getV1() };
+        Sprite sprite = MinecraftClient.getInstance().getBlockRenderManager().getModels().getModelManager().method_24153(SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE).getSprite(new Identifier(name.replace(":", ":blocks/")));
+        return new float[]{sprite.getMinU(), sprite.getMaxU(), sprite.getMinV(), sprite.getMaxV()};
     }
 
     @Override
@@ -114,7 +96,7 @@ public class InterfaceRender implements IInterfaceRender {
         try {
             String domain = name.substring("/assets/".length(), name.indexOf("/", "/assets/".length()));
             String location = name.substring("/assets/".length() + domain.length() + 1);
-            return Minecraft.getInstance().getResourceManager().getResource(new ResourceLocation(domain, location)).getInputStream();
+            return MinecraftClient.getInstance().getResourceManager().getResource(new Identifier(domain, location)).getInputStream();
         } catch (Exception e) {
             return null;
         }
@@ -124,30 +106,30 @@ public class InterfaceRender implements IInterfaceRender {
     public void renderItemModel(GUIComponentItem component) {
         stacksToRender.add(component);
     }
-    
+
     @Override
     public void renderVertices(RenderableData data, boolean changedSinceLastRender) {
-        matrixStack.pushPose();
+        matrixStack.push();
         Matrix4f matrix4f = convertMatrix4f(data.transform);
-        MatrixStack.Entry stackEntry = matrixStack.last();
-        stackEntry.pose().multiply(matrix4f);
+        MatrixStack.Entry stackEntry = matrixStack.peek();
+        stackEntry.getModel().multiply(matrix4f);
 
         if (data.vertexObject.isLines) {
-            IVertexBuilder buffer = renderBuffer.getBuffer(RenderType.lines());
+            VertexConsumer buffer = renderBuffer.getBuffer(RenderLayer.getLines());
             while (data.vertexObject.vertices.hasRemaining()) {
-                buffer.vertex(stackEntry.pose(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get());
+                buffer.vertex(stackEntry.getModel(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get(), data.vertexObject.vertices.get());
                 buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
-                buffer.endVertex();
+                buffer.next();
             }
             //Rewind buffer for next read.
             data.vertexObject.vertices.rewind();
         } else {
-            String typeID = data.texture + data.isTranslucent + data.lightingMode + data.enableBrightBlending;
-            final RenderType renderType;
+            String typeId = data.texture + data.isTranslucent + data.lightingMode + data.enableBrightBlending;
+            final RenderLayer renderLayer;
             if (data.vertexObject.cacheVertices && !renderingGUI && ConfigSystem.client.renderingSettings.renderingMode.value != 2) {
-            	//Get the render type and data buffer for this entity.
-                renderType = renderTypes.computeIfAbsent(typeID, k -> CustomRenderType.create("mts_entity", DefaultVertexFormats.NEW_ENTITY, 7, 2097152, true, data.isTranslucent, CustomRenderType.createForObject(data).createCompositeState(false)));
-                BufferData buffer = buffers.computeIfAbsent(data, k -> new BufferData(renderType, data));
+                //Get the render type and data buffer for this entity.
+                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 2097152, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
+                BufferData buffer = buffers.computeIfAbsent(data, k -> new BufferData(renderLayer, data));
 
                 //Reset buffer if it's not ready.
                 if (changedSinceLastRender) {
@@ -156,7 +138,7 @@ public class InterfaceRender implements IInterfaceRender {
                 }
                 if (!buffer.isReady) {
                     int index = 0;
-                    buffer.builder.begin(GL11.GL_QUADS, renderType.format());
+                    buffer.builder.begin(GL11.GL_QUADS, renderLayer.getVertexFormat());
                     while (data.vertexObject.vertices.hasRemaining()) {
                         //Need to parse these out first since our order differs.
                         float normalX = data.vertexObject.vertices.get();
@@ -170,7 +152,7 @@ public class InterfaceRender implements IInterfaceRender {
 
                         //Add the vertex format bits.
                         do {
-                            buffer.builder.vertex(posX, posY, posZ, data.color.red, data.color.green, data.color.blue, data.alpha, texU, texV, OverlayTexture.NO_OVERLAY, data.worldLightValue, normalX, normalY, normalZ);
+                            buffer.builder.vertex(posX, posY, posZ, data.color.red, data.color.green, data.color.blue, data.alpha, texU, texV, OverlayTexture.DEFAULT_UV, data.worldLightValue, normalX, normalY, normalZ);
                         } while (++index == 3);
                         if (index == 4) {
                             index = 0;
@@ -183,16 +165,16 @@ public class InterfaceRender implements IInterfaceRender {
                 }
 
                 //Add this buffer to the list to render later.
-                List<RenderData> renders = queuedRenders.get(renderType);
+                List<RenderData> renders = queuedRenders.get(renderLayer);
                 if (renders == null) {
                     renders = new ArrayList<>();
-                    queuedRenders.put(renderType, renders);
+                    queuedRenders.put(renderLayer, renders);
                 }
-                renders.add(new RenderData(stackEntry.pose(), buffer.buffer));
+                renders.add(new RenderData(stackEntry.getModel(), buffer.buffer));
             } else {
-                renderType = renderTypes.computeIfAbsent(typeID, k -> CustomRenderType.create("mts_entity", DefaultVertexFormats.NEW_ENTITY, 7, 256, true, data.isTranslucent, CustomRenderType.createForObject(data).createCompositeState(false)));
-                IVertexBuilder buffer = renderBuffer.getBuffer(renderType);
-                
+                renderLayer = renderTypes.computeIfAbsent(typeId, k -> CustomRenderLayer.of("mts_entity", VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, 7, 256, true, data.isTranslucent, CustomRenderLayer.createForObject(data).build(false)));
+                VertexConsumer buffer = renderBuffer.getBuffer(renderLayer);
+
                 //Now populate the state we requested.
                 int index = 0;
                 while (data.vertexObject.vertices.hasRemaining()) {
@@ -212,13 +194,13 @@ public class InterfaceRender implements IInterfaceRender {
                     //Yes, we have to render 25% more data because Mojang doesn't wanna move to tris like literally every other game.
                     //Yes, they're stupid.
                     do {
-                        buffer.vertex(stackEntry.pose(), posX, posY, posZ);
+                        buffer.vertex(stackEntry.getModel(), posX, posY, posZ);
                         buffer.color(data.color.red, data.color.green, data.color.blue, data.alpha);
-                        buffer.uv(texU, texV);
-                        buffer.overlayCoords(OverlayTexture.NO_OVERLAY);
-                        buffer.uv2(data.worldLightValue);
-                        buffer.normal(stackEntry.normal(), normalX, normalY, normalZ);
-                        buffer.endVertex();
+                        buffer.texture(texU, texV);
+                        buffer.overlay(OverlayTexture.DEFAULT_UV);
+                        buffer.light(data.worldLightValue);
+                        buffer.normal(stackEntry.getNormal(), normalX, normalY, normalZ);
+                        buffer.next();
                     } while (++index == 3);
                     if (index == 4) {
                         index = 0;
@@ -228,42 +210,42 @@ public class InterfaceRender implements IInterfaceRender {
                 data.vertexObject.vertices.rewind();
             }
         }
-        matrixStack.popPose();
+        matrixStack.pop();
     }
 
     @Override
     public void deleteVertices(RenderableData data) {
         if (data.vertexObject.cacheVertices) {
-	    	//Add to removed render list, we should only remove renders AFTER they are rendered.
-	    	//This ensures they are un-bound, if the were bound prior.
+            //Add to removed render list, we should only remove renders AFTER they are rendered.
+            //This ensures they are un-bound, if the were bound prior.
             //Make sure we actually bound a buffer; just because the main system asks for a bound buffer,
-    	    //doesn't mean we actually can give it one.  GUI models are one such case, as they don't work right
+            //doesn't mean we actually can give it one.  GUI models are one such case, as they don't work right
             //with bound buffers due to matrix differences.
             BufferData buffer = buffers.remove(data);
             if (buffer != null) {
                 removedRenders.add(buffer);
             }
-    	}
+        }
     }
 
     @Override
     public int getLightingAtPosition(Point3D position) {
         BlockPos pos = new BlockPos(position.x, position.y, position.z);
-        return LightTexture.pack(Minecraft.getInstance().level.getBrightness(LightType.BLOCK, pos), Minecraft.getInstance().level.getBrightness(LightType.SKY, pos));
+        return LightmapTextureManager.pack(MinecraftClient.getInstance().world.getLightLevel(LightType.BLOCK, pos), MinecraftClient.getInstance().world.getLightLevel(LightType.SKY, pos));
     }
 
     @Override
     public boolean shouldRenderBoundingBoxes() {
-        return Minecraft.getInstance().getEntityRenderDispatcher().shouldRenderHitBoxes();
+        return MinecraftClient.getInstance().getEntityRenderDispatcher().shouldRenderHitboxes();
     }
 
     @Override
     public boolean bindURLTexture(String textureURL, InputStream stream) {
         if (stream != null) {
             try {
-                NativeImage image = NativeImage.read(NativeImage.PixelFormat.RGB, stream);
-                DynamicTexture texture = new DynamicTexture(image);
-                ResourceLocation textureLocation = Minecraft.getInstance().textureManager.register("mts-url", texture);
+                NativeImage image = NativeImage.read(NativeImage.Format.BGR, stream);
+                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
+                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-url", texture);
                 onlineTextures.put(textureURL, textureLocation);
                 return true;
             } catch (Exception e) {
@@ -277,7 +259,7 @@ public class InterfaceRender implements IInterfaceRender {
 
     @Override
     public boolean bindURLGIF(String textureURL, ParsedGIF gif) {
-        Map<GIFImageFrame, ResourceLocation> gifFrameIndexes = new HashMap<>();
+        Map<GIFImageFrame, Identifier> gifFrameIndexes = new HashMap<>();
         for (GIFImageFrame frame : gif.frames.values()) {
             try {
                 BufferedImage frameBuffer = frame.getImage();
@@ -285,9 +267,9 @@ public class InterfaceRender implements IInterfaceRender {
                 ImageIO.write(frameBuffer, "gif", frameArrayStream);
                 InputStream frameStream = new ByteArrayInputStream(frameArrayStream.toByteArray());
 
-                NativeImage image = NativeImage.read(NativeImage.PixelFormat.RGB, frameStream);
-                DynamicTexture texture = new DynamicTexture(image);
-                ResourceLocation textureLocation = Minecraft.getInstance().textureManager.register("mts-gif", texture);
+                NativeImage image = NativeImage.read(NativeImage.Format.BGR, frameStream);
+                NativeImageBackedTexture texture = new NativeImageBackedTexture(image);
+                Identifier textureLocation = MinecraftClient.getInstance().textureManager.registerDynamicTexture("mts-gif", texture);
                 gifFrameIndexes.put(frame, textureLocation);
             } catch (Exception e) {
                 return false;
@@ -301,21 +283,21 @@ public class InterfaceRender implements IInterfaceRender {
     /**
      * Helper function to create a new texture state for the specified texture location.
      */
-    private static RenderState.TextureState getTexture(String textureLocation) {
+    private static RenderPhase.Texture getTexture(String textureLocation) {
         //Check to make sure textures exist.  We delay creating because some mods screw up this stuff in boot.  Cray, looking at you buddy.
         if (MISSING_STATE == null) {
-            MISSING_STATE = new RenderState.TextureState(new ResourceLocation("mts:textures/rendering/missing.png"), false, false);
-            BLOCK_STATE = new RenderState.TextureState(PlayerContainer.BLOCK_ATLAS, false, false);
+            MISSING_STATE = new RenderPhase.Texture(new Identifier("mts:textures/rendering/missing.png"), false, false);
+            BLOCK_STATE = new RenderPhase.Texture(PlayerScreenHandler.BLOCK_ATLAS_TEXTURE, false, false);
         }
 
         if (animatedGIFs.containsKey(textureLocation)) {
             //Special case for GIFs.
             ParsedGIF parsedGIF = animatedGIFs.get(textureLocation);
-            return new RenderState.TextureState(animatedGIFFrames.get(parsedGIF).get(parsedGIF.getCurrentFrame()), false, false);
+            return new RenderPhase.Texture(animatedGIFFrames.get(parsedGIF).get(parsedGIF.getCurrentFrame()), false, false);
         } else if (onlineTextures.containsKey(textureLocation)) {
             //Online texture.
-            ResourceLocation onlineTexture = onlineTextures.get(textureLocation);
-            return onlineTexture != null ? new RenderState.TextureState(onlineTextures.get(textureLocation), false, false) : MISSING_STATE;
+            Identifier onlineTexture = onlineTextures.get(textureLocation);
+            return onlineTexture != null ? new RenderPhase.Texture(onlineTextures.get(textureLocation), false, false) : MISSING_STATE;
         } else if (textureLocation.equals(RenderableData.GLOBAL_TEXTURE_NAME)) {
             //Default texture.
             return BLOCK_STATE;
@@ -331,7 +313,7 @@ public class InterfaceRender implements IInterfaceRender {
                 //Convert the classpath-location to a domain-location path for MC.
                 String domain = formattedLocation.substring("/assets/".length(), formattedLocation.indexOf("/", "/assets/".length()));
                 String location = formattedLocation.substring("/assets/".length() + domain.length() + 1);
-                return new RenderState.TextureState(new ResourceLocation(domain, location), false, false);
+                return new RenderPhase.Texture(new Identifier(domain, location), false, false);
             } else {
                 InterfaceManager.coreInterface.logError("Could not find texture: " + formattedLocation + " Reverting to fallback texture.");
                 return MISSING_STATE;
@@ -346,22 +328,22 @@ public class InterfaceRender implements IInterfaceRender {
     protected static void renderGUI(MatrixStack stack, int mouseX, int mouseY, int screenWidth, int screenHeight, float partialTicks, boolean updateGUIs) {
         //Get the buffer for GUI rendering.
         matrixStack = stack;
-        matrixStack.pushPose();
+        matrixStack.push();
         renderingGUI = true;
-        IRenderTypeBuffer.Impl guiBuffer = IRenderTypeBuffer.immediate(Tessellator.getInstance().getBuilder());
+        VertexConsumerProvider.Immediate guiBuffer = VertexConsumerProvider.immediate(Tessellator.getInstance().getBuffer());
         renderBuffer = guiBuffer;
 
         //Render GUIs, re-creating their components if needed.
         //Set Y-axis to inverted to have correct orientation.
         matrixStack.scale(1.0F, -1.0F, 1.0F);
-        
+
         //Render main pass, then blended pass.
         int displayGUIIndex = 0;
         for (AGUIBase gui : AGUIBase.activeGUIs) {
             if (updateGUIs || gui.components.isEmpty()) {
                 gui.setupComponentsInit(screenWidth, screenHeight);
             }
-            matrixStack.pushPose();
+            matrixStack.push();
             if (gui.capturesPlayer()) {
                 //Translate in front of the main GUI components.
                 matrixStack.translate(0, 0, 250);
@@ -370,45 +352,47 @@ public class InterfaceRender implements IInterfaceRender {
                 matrixStack.translate(0, 0, -500 + 250 * displayGUIIndex++);
             }
             gui.render(mouseX, mouseY, false, partialTicks);
-            guiBuffer.endBatch();
+            guiBuffer.draw();
             //Not needed, since we can't draw to custom buffers with GUIs.
             //renderBuffers();
 
             //Need to use RenderSystem here, since this is a direct buffer.
             RenderSystem.enableBlend();
             gui.render(mouseX, mouseY, true, partialTicks);
-            guiBuffer.endBatch();
+            guiBuffer.draw();
             //renderBuffers();
             RenderSystem.disableBlend();
-        
+
             //Render all stacks.  These have to be in the standard GUI reference frame or they won't render.
             matrixStack.scale(1.0F, -1.0F, 1.0F);
 
             for (GUIComponentItem component : stacksToRender) {
                 //Double-check the stack is still present, it might have been un-set since this call.
-                if ((WrapperItemStack) component.stackToRender != null) {
+                if (component.stackToRender != null) {
+                    MinecraftClient client = MinecraftClient.getInstance();
+
                     //Apply existing transform.
                     //Need to translate the z-offset to our value, which includes a -100 for the default added value.
                     //Blit starts at 200 though, plus 32 for the default item render.
-                    float zOffset = Minecraft.getInstance().getItemRenderer().blitOffset;
-                    Minecraft.getInstance().getItemRenderer().blitOffset = (float) (200 + component.translation.z - 100);
+                    float zOffset = client.getItemRenderer().zOffset;
+                    client.getItemRenderer().zOffset = (float) (200 + component.translation.z - 100);
                     if (component.scale != 1.0) {
                         //Need to use RenderSystem here, since we can't access the stack directly for rendering scaling.
                         RenderSystem.pushMatrix();
                         RenderSystem.scalef(component.scale, component.scale, 1.0F);
-                        Minecraft.getInstance().getItemRenderer().renderGuiItem(((WrapperItemStack) component.stackToRender).stack, (int) (component.translation.x / component.scale), (int) (-component.translation.y / component.scale) + 1);
+                        client.getItemRenderer().renderGuiItemIcon(((WrapperItemStack) component.stackToRender).stack, (int) (component.translation.x / component.scale), (int) (-component.translation.y / component.scale) + 1);
                         RenderSystem.popMatrix();
                     } else {
-                        Minecraft.getInstance().getItemRenderer().renderGuiItem(((WrapperItemStack) component.stackToRender).stack, (int) component.translation.x, (int) -component.translation.y);
+                        client.getItemRenderer().renderGuiItemIcon(((WrapperItemStack) component.stackToRender).stack, (int) component.translation.x, (int) -component.translation.y);
                     }
-                    Minecraft.getInstance().getItemRenderer().blitOffset = zOffset;
+                    client.getItemRenderer().zOffset = zOffset;
                 }
             }
             stacksToRender.clear();
-        
-            matrixStack.popPose();
+
+            matrixStack.pop();
         }
-        matrixStack.popPose();
+        matrixStack.pop();
         renderingGUI = false;
     }
 
@@ -443,78 +427,76 @@ public class InterfaceRender implements IInterfaceRender {
         //Register the global entity rendering class.
         RenderingRegistry.registerEntityRenderingHandler(BuilderEntityRenderForwarder.E_TYPE4.get(), manager -> new EntityRenderer<BuilderEntityRenderForwarder>(manager) {
             @Override
-            public ResourceLocation getTextureLocation(BuilderEntityRenderForwarder builder) {
+            public Identifier getTexture(BuilderEntityRenderForwarder builder) {
                 return null;
             }
 
             @Override
-            public boolean shouldRender(BuilderEntityRenderForwarder builder, ClippingHelper camera, double camX, double camY, double camZ) {
+            public boolean shouldRender(BuilderEntityRenderForwarder builder, Frustum frustum, double x, double y, double z) {
                 //Always render the forwarder, no matter where the camera is.
                 return true;
             }
 
             @Override
-            public void render(BuilderEntityRenderForwarder builder, float entityYaw, float partialTicks, MatrixStack stack, IRenderTypeBuffer buffer, int packedLight) {
-                if (builder.playerFollowing == Minecraft.getInstance().player && !ConfigSystem.settings.general.forceRenderLastSolid.value) {
+            public void render(BuilderEntityRenderForwarder builder, float entityYaw, float partialTicks, MatrixStack stack, VertexConsumerProvider consumerProvider, int packedLight) {
+                if (builder.playerFollowing == MinecraftClient.getInstance().player && !ConfigSystem.settings.general.forceRenderLastSolid.value) {
                     //Set camera offset point for later.
-                    renderCameraOffset.set(MathHelper.lerp(partialTicks, builder.xOld, builder.getX()), MathHelper.lerp(partialTicks, builder.yOld, builder.getY()), MathHelper.lerp(partialTicks, builder.zOld, builder.getZ()));
+                    renderCameraOffset.set(MathHelper.lerp(partialTicks, builder.lastRenderX, builder.getX()), MathHelper.lerp(partialTicks, builder.lastRenderY, builder.getY()), MathHelper.lerp(partialTicks, builder.lastRenderZ, builder.getZ()));
 
                     //Set the stack variables and render.
-                    doRenderCall(stack, buffer, false, partialTicks);
+                    doRenderCall(stack, consumerProvider, false, partialTicks);
                 }
             }
         });
 
         //Register blank classes for the other builders.
         //If we don't, the game crashes when trying to render them.
-        RenderingRegistry.registerEntityRenderingHandler(BuilderEntityExisting.E_TYPE2.get(), manager -> new BlankRender<BuilderEntityExisting>(manager));
-        RenderingRegistry.registerEntityRenderingHandler(BuilderEntityLinkedSeat.E_TYPE3.get(), manager -> new BlankRender<BuilderEntityLinkedSeat>(manager));
+        RenderingRegistry.registerEntityRenderingHandler(BuilderEntityExisting.E_TYPE2.get(), BlankRender::new);
+        RenderingRegistry.registerEntityRenderingHandler(BuilderEntityLinkedSeat.E_TYPE3.get(), BlankRender::new);
     }
 
-    public static void doRenderCall(MatrixStack stack, IRenderTypeBuffer buffer, boolean blendingEnabled, float partialTicks) {
+    public static void doRenderCall(MatrixStack stack, VertexConsumerProvider buffer, boolean blendingEnabled, float partialTicks) {
         matrixStack = stack;
         renderBuffer = buffer;
         AWrapperWorld world = InterfaceManager.clientInterface.getClientWorld();
         ConcurrentLinkedQueue<AEntityC_Renderable> allEntities = world.renderableEntities;
-        if (allEntities != null) {
-            world.beginProfiling("MTSRendering_Setup", true);
+        world.beginProfiling("MTSRendering_Setup", true);
 
-            //NOTE: this operation occurs on a ConcurrentLinkedQueue.  Therefore, updates will
-            //not occur one after another.  Sanitize your inputs!
-            for (AEntityC_Renderable entity : allEntities) {
-                matrixStack.pushPose();
-                matrixStack.translate(entity.position.x - renderCameraOffset.x, entity.position.y - renderCameraOffset.y, entity.position.z - renderCameraOffset.z);
-                entity.render(blendingEnabled, partialTicks);
-                matrixStack.popPose();
-            }
-
-            //Need to tell the immediate buffer  it's done rendering, else it'll hold onto the data and crash other systems.
-            if (renderBuffer instanceof IRenderTypeBuffer.Impl) {
-                ((IRenderTypeBuffer.Impl) renderBuffer).endBatch();
-            }
-
-            //Now do the actual render.
-            world.beginProfiling("MTSRendering_Execution", false);
-            renderBuffers();
-            world.endProfiling();
+        //NOTE: this operation occurs on a ConcurrentLinkedQueue.  Therefore, updates will
+        //not occur one after another.  Sanitize your inputs!
+        for (AEntityC_Renderable entity : allEntities) {
+            matrixStack.push();
+            matrixStack.translate(entity.position.x - renderCameraOffset.x, entity.position.y - renderCameraOffset.y, entity.position.z - renderCameraOffset.z);
+            entity.render(blendingEnabled, partialTicks);
+            matrixStack.pop();
         }
+
+        //Need to tell the immediate buffer it's done rendering, otherwise it'll hold onto the data and crash other systems.
+        if (renderBuffer instanceof VertexConsumerProvider.Immediate) {
+            ((VertexConsumerProvider.Immediate) renderBuffer).draw();
+        }
+
+        //Now do the actual render.
+        world.beginProfiling("MTSRendering_Execution", false);
+        renderBuffers();
+        world.endProfiling();
     }
 
     private static void renderBuffers() {
         //Call order is CRITICAL and will lead to random JME faults with no stacktrace if modified!
-        for (Entry<RenderType, List<RenderData>> renderEntry : queuedRenders.entrySet()) {
-            RenderType renderType = renderEntry.getKey();
-            List<RenderData> datas = renderEntry.getValue();
-            if (!datas.isEmpty()) {
-                renderType.setupRenderState();
-                for (RenderData data : datas) {
+        for (Entry<RenderLayer, List<RenderData>> renderEntry : queuedRenders.entrySet()) {
+            RenderLayer renderLayer = renderEntry.getKey();
+            List<RenderData> renderData = renderEntry.getValue();
+            if (!renderData.isEmpty()) {
+                renderLayer.startDrawing();
+                for (RenderData data : renderData) {
                     data.buffer.bind();
-                    renderType.format().setupBufferState(0L);
+                    renderLayer.getVertexFormat().startDrawing(0L);
                     data.buffer.draw(data.matrix, GL11.GL_QUADS);
                 }
-                renderType.format().clearBufferState();
-                renderType.clearRenderState();
-                datas.clear();
+                renderLayer.getVertexFormat().endDrawing();
+                renderLayer.endDrawing();
+                renderData.clear();
             }
         }
         VertexBuffer.unbind();
@@ -523,53 +505,55 @@ public class InterfaceRender implements IInterfaceRender {
             removedRenders.clear();
         }
     }
-    
 
-    /** Blank render class used to bypass rendering for all other builders.**/
+
+    /**
+     * Blank render class used to bypass rendering for all other builders.
+     **/
     private static class BlankRender<T extends ABuilderEntityBase> extends EntityRenderer<T> {
 
-        protected BlankRender(EntityRendererManager p_i46179_1_) {
-            super(p_i46179_1_);
+        protected BlankRender(EntityRenderDispatcher dispatcher) {
+            super(dispatcher);
         }
 
         @Override
-        public ResourceLocation getTextureLocation(T pEntity) {
+        public Identifier getTexture(T entity) {
             return null;
         }
 
         @Override
-        public boolean shouldRender(T builder, ClippingHelper camera, double camX, double camY, double camZ) {
+        public boolean shouldRender(T entity, Frustum frustum, double x, double y, double z) {
             return false;
         }
     }
 
-    private static class CustomRenderType extends RenderType {
-        private CustomRenderType(String name, VertexFormat fmt, int glMode, int size, boolean doCrumbling, boolean depthSorting, Runnable onEnable, Runnable onDisable) {
+    private static class CustomRenderLayer extends RenderLayer {
+        private CustomRenderLayer(String name, VertexFormat fmt, int glMode, int size, boolean doCrumbling, boolean depthSorting, Runnable onEnable, Runnable onDisable) {
             super(name, fmt, glMode, size, doCrumbling, depthSorting, onEnable, onDisable);
             throw new IllegalStateException("This class must not be instantiated, this is only here to gain access to the rendering constants.");
         }
 
-        private static Builder createForObject(RenderableData data) {
+        private static RenderLayer.MultiPhaseParameters.Builder createForObject(RenderableData data) {
             //Create the state builder.  Changed states are active, default states are commented to save processing but still show the state.
-            RenderType.State.Builder stateBuilder = RenderType.State.builder();
+            RenderLayer.MultiPhaseParameters.Builder stateBuilder = RenderLayer.MultiPhaseParameters.builder();
 
-            stateBuilder.setTextureState(getTexture(data.texture));
+            stateBuilder.texture(getTexture(data.texture));
             //Transparency is also blend function, so we need to override that with a custom one if we are doing bright blending.
-            stateBuilder.setTransparencyState(data.enableBrightBlending ? BRIGHTNESS_TRANSPARENCY : (data.isTranslucent ? PROPER_TRANSLUCENT_TRANSPARENCY : RenderType.NO_TRANSPARENCY));
+            stateBuilder.transparency(data.enableBrightBlending ? BRIGHTNESS_TRANSPARENCY : (data.isTranslucent ? PROPER_TRANSLUCENT_TRANSPARENCY : RenderPhase.NO_TRANSPARENCY));
             //Diffuse lighting is the ambient lighting that auto-shades models.
-            stateBuilder.setDiffuseLightingState(data.lightingMode.disableTextureShadows ? NO_DIFFUSE_LIGHTING : DIFFUSE_LIGHTING);
+            stateBuilder.diffuseLighting(data.lightingMode.disableTextureShadows ? RenderPhase.DISABLE_DIFFUSE_LIGHTING : RenderPhase.ENABLE_DIFFUSE_LIGHTING);
             //Always smooth shading.
-            stateBuilder.setShadeModelState(SMOOTH_SHADE);
+            stateBuilder.shadeModel(RenderPhase.SMOOTH_SHADE_MODEL);
             //Use default alpha to remove alpha fragments in cut-out textures.
-            stateBuilder.setAlphaState(DEFAULT_ALPHA);
+            stateBuilder.alpha(RenderPhase.ONE_TENTH_ALPHA);
             //Depth test is fine, it ensures translucent things don't render in front of everything.
             //stateBuilder.setDepthTestState(LEQUAL_DEPTH_TEST);
             //Cull is fine.  Not sure what this does, actually...
             //stateBuilder.setCullState(NO_CULL);
             //Lightmap is on unless we are bright.
-            stateBuilder.setLightmapState(data.lightingMode.disableWorldLighting ? NO_LIGHTMAP : LIGHTMAP);
+            stateBuilder.lightmap(data.lightingMode.disableWorldLighting ? RenderPhase.DISABLE_LIGHTMAP : RenderPhase.ENABLE_LIGHTMAP);
             //No overlays ever.
-            stateBuilder.setOverlayState(NO_OVERLAY);
+            stateBuilder.overlay(RenderPhase.DISABLE_OVERLAY_COLOR);
             //No fog.
             //stateBuilder.setFogState(NO_FOG);
             //No layering.
@@ -608,13 +592,13 @@ public class InterfaceRender implements IInterfaceRender {
             buffer = null;
         }
 
-        private BufferData(RenderType type, RenderableData data) {
+        private BufferData(RenderLayer layer, RenderableData data) {
             int vertices = data.vertexObject.vertices.limit() / 8;
             //Convert verts to faces, then back to quad-verts for MC rendering.
             //Add one face extra, since MC will want to increase the buffer if sees it can't handle another vert.
             vertices = ((vertices / 3) + 1) * 4;
-            this.builder = new BufferBuilder(type.format().getIntegerSize() * vertices);
-            this.buffer = new VertexBuffer(type.format());
+            this.builder = new BufferBuilder(layer.getVertexFormat().getVertexSizeInteger() * vertices);
+            this.buffer = new VertexBuffer(layer.getVertexFormat());
         }
     }
 
@@ -624,10 +608,10 @@ public class InterfaceRender implements IInterfaceRender {
      * objects, since we don't sort them and we could render behind an already-rendered transparent
      * fragment.  Say if we have two headlight flares.
      */
-    private static final RenderState.TransparencyState PROPER_TRANSLUCENT_TRANSPARENCY = new RenderState.TransparencyState("proper_translucent_transparency", () -> {
+    private static final RenderPhase.Transparency PROPER_TRANSLUCENT_TRANSPARENCY = new RenderPhase.Transparency("proper_translucent_transparency", () -> {
         RenderSystem.enableBlend();
         RenderSystem.depthMask(false);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE_MINUS_SRC_ALPHA);
     }, () -> {
         RenderSystem.disableBlend();
         RenderSystem.depthMask(true);
@@ -638,10 +622,10 @@ public class InterfaceRender implements IInterfaceRender {
      * Brightness transparency.  Does a special blending operation to make things behind
      * the object brighter based on the object's alpha value.  More alpha means more bright.
      */
-    private static final RenderState.TransparencyState BRIGHTNESS_TRANSPARENCY = new RenderState.TransparencyState("brightness_transparency", () -> {
+    private static final RenderPhase.Transparency BRIGHTNESS_TRANSPARENCY = new RenderPhase.Transparency("brightness_transparency", () -> {
         RenderSystem.enableBlend();
         RenderSystem.depthMask(false);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.DST_COLOR, GlStateManager.DestFactor.SRC_ALPHA);
+        RenderSystem.blendFunc(GlStateManager.SrcFactor.DST_COLOR, GlStateManager.DstFactor.SRC_ALPHA);
     }, () -> {
         RenderSystem.disableBlend();
         RenderSystem.depthMask(true);

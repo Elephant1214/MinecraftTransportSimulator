@@ -1,16 +1,5 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import org.lwjgl.glfw.GLFW;
-
 import minecrafttransportsimulator.baseclasses.EntityManager;
 import minecrafttransportsimulator.guis.instances.GUIConfig;
 import minecrafttransportsimulator.jsondefs.JSONConfigClient.ConfigJoystick;
@@ -22,15 +11,19 @@ import minecrafttransportsimulator.systems.ControlSystem.ControlsJoystick;
 import minecrafttransportsimulator.systems.LanguageSystem;
 import net.java.games.input.Controller;
 import net.java.games.input.ControllerEnvironment;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
-import net.minecraft.client.util.InputMappings;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.util.InputUtil;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.client.event.InputEvent.KeyInputEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.*;
+import java.util.Map.Entry;
 
 @EventBusSubscriber(Dist.CLIENT)
 public class InterfaceInput implements IInterfaceInput {
@@ -173,7 +166,7 @@ public class InterfaceInput implements IInterfaceInput {
 
     @Override
     public String getNameForKeyCode(int keyCode) {
-        return InputMappings.getKey(keyCode, 0).getDisplayName().getString();
+        return InputUtil.fromKeyCode(keyCode, 0).getLocalizedText().getString();
     }
 
     @Override
@@ -182,18 +175,18 @@ public class InterfaceInput implements IInterfaceInput {
         //We only need to convert defaults.
         switch (name) {
             case "RSHIFT":
-                return InputMappings.getKey("key.keyboard.right.shift").getValue();
+                return InputUtil.fromTranslationKey("key.keyboard.right.shift").getCode();
             case "PRIOR":
-                return InputMappings.getKey("key.keyboard.page.up").getValue();
+                return InputUtil.fromTranslationKey("key.keyboard.page.up").getCode();
             case "NEXT":
-                return InputMappings.getKey("key.keyboard.page.down").getValue();
+                return InputUtil.fromTranslationKey("key.keyboard.page.down").getCode();
             case "SCROLL":
-                return InputMappings.getKey("key.keyboard.scroll.lock").getValue();
+                return InputUtil.fromTranslationKey("key.keyboard.scroll.lock").getCode();
             default: {
                 if (name.contains("NUMPAD")) {
-                    return InputMappings.getKey("key.keyboard.keypad." + name.substring(name.length() - 1)).getValue();
+                    return InputUtil.fromTranslationKey("key.keyboard.keypad." + name.substring(name.length() - 1)).getCode();
                 } else {
-                    return InputMappings.getKey("key.keyboard." + name.toLowerCase(Locale.ROOT)).getValue();
+                    return InputUtil.fromTranslationKey("key.keyboard." + name.toLowerCase(Locale.ROOT)).getCode();
                 }
             }
         }
@@ -201,7 +194,7 @@ public class InterfaceInput implements IInterfaceInput {
 
     @Override
     public boolean isKeyPressed(int keyCode) {
-        return GLFW.glfwGetKey(Minecraft.getInstance().getWindow().getWindow(), keyCode) == GLFW.GLFW_PRESS;
+        return GLFW.glfwGetKey(MinecraftClient.getInstance().getWindow().getHandle(), keyCode) == GLFW.GLFW_PRESS;
     }
 
     @Override
@@ -240,12 +233,12 @@ public class InterfaceInput implements IInterfaceInput {
             return classicJoystickMap.get(joystickName).getComponents()[index].getName();
         } else {
             if (isJoystickComponentAxis(joystickName, index)) {
-                return "Axis: " + String.valueOf(index);
+                return "Axis: " + index;
             } else {
                 if (index < joystickAxisCounts.get(joystickName) + joystickHatCounts.get(joystickName)) {
-                    return "Hat: " + String.valueOf(index - joystickAxisCounts.get(joystickName));
+                    return "Hat: " + (index - joystickAxisCounts.get(joystickName));
                 } else {
-                    return "Button: " + String.valueOf(index - joystickAxisCounts.get(joystickName) - joystickHatCounts.get(joystickName));
+                    return "Button: " + (index - joystickAxisCounts.get(joystickName) - joystickHatCounts.get(joystickName));
                 }
             }
         }
@@ -281,7 +274,6 @@ public class InterfaceInput implements IInterfaceInput {
                         case (GLFW.GLFW_HAT_DOWN):
                             return 0.75F;
                         case (GLFW.GLFW_HAT_RIGHT):
-                            return 1.0F;
                         default:
                             return 1.0F;
                     }
@@ -322,12 +314,12 @@ public class InterfaceInput implements IInterfaceInput {
 
     @Override
     public boolean isLeftMouseButtonDown() {
-        return Minecraft.getInstance().options.keyAttack.isDown();
+        return MinecraftClient.getInstance().options.keyAttack.isPressed();
     }
 
     @Override
     public boolean isRightMouseButtonDown() {
-        return Minecraft.getInstance().options.keyUse.isDown();
+        return MinecraftClient.getInstance().options.keyUse.isPressed();
     }
 
     /**
@@ -349,10 +341,10 @@ public class InterfaceInput implements IInterfaceInput {
         }
 
         //Check if we pressed the config or import key.
-        if (configKey.isDown() && !InterfaceManager.clientInterface.isGUIOpen()) {
+        if (configKey.isPressed() && !InterfaceManager.clientInterface.isGUIOpen()) {
             new GUIConfig();
-        } else if (ConfigSystem.settings.general.devMode.value && importKey.isDown()) {
-        	EntityManager.doImports(() -> InterfaceManager.clientInterface.getClientPlayer().displayChatMessage(LanguageSystem.SYSTEM_DEBUG, JSONParser.importAllJSONs(true)));
+        } else if (ConfigSystem.settings.general.devMode.value && importKey.isPressed()) {
+            EntityManager.doImports(() -> InterfaceManager.clientInterface.getClientPlayer().displayChatMessage(LanguageSystem.SYSTEM_DEBUG, JSONParser.importAllJSONs(true)));
         }
     }
 

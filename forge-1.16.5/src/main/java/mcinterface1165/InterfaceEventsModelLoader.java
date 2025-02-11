@@ -1,27 +1,22 @@
 package mcinterface1165;
 
+import minecrafttransportsimulator.items.components.AItemPack;
+import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.packloading.PackParser;
+import minecrafttransportsimulator.packloading.PackResourceLoader;
+import minecrafttransportsimulator.systems.ConfigSystem;
+import net.minecraft.resource.ResourcePack;
+import net.minecraft.resource.ResourceType;
+import net.minecraft.resource.metadata.ResourceMetadataReader;
+import net.minecraft.util.Identifier;
+
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Predicate;
-
-import minecrafttransportsimulator.items.components.AItemPack;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
-import minecrafttransportsimulator.packloading.PackParser;
-import minecrafttransportsimulator.packloading.PackResourceLoader;
-import minecrafttransportsimulator.packloading.PackResourceLoader.ResourceType;
-import minecrafttransportsimulator.systems.ConfigSystem;
-import net.minecraft.resources.IResourcePack;
-import net.minecraft.resources.ResourcePackType;
-import net.minecraft.resources.data.IMetadataSectionSerializer;
-import net.minecraft.util.ResourceLocation;
 
 /**
  * Interface for handling events pertaining to loading models into MC.  These events are mainly for item models,
@@ -47,7 +42,7 @@ public class InterfaceEventsModelLoader {
     /**
      * Custom ResourcePack class for auto-generating item JSONs.
      */
-    public static class PackResourcePack implements IResourcePack {
+    public static class PackResourcePack implements ResourcePack {
         private final String domain;
         private final Set<String> domains;
 
@@ -59,10 +54,10 @@ public class InterfaceEventsModelLoader {
         }
 
         @Override
-        public InputStream getResource(ResourcePackType type, ResourceLocation location) throws IOException {
+        public InputStream open(ResourceType type, Identifier id) throws IOException {
             //Create stream return variable and get raw data.
             InputStream stream;
-            String rawPackInfo = location.getPath();
+            String rawPackInfo = id.getPath();
 
             //If we are for an item JSON, try to find that JSON, or generate one automatically.
             //If we are for an item PNG, just load the PNG as-is.  If we don't find it, then just let MC purple checker it.
@@ -93,13 +88,13 @@ public class InterfaceEventsModelLoader {
                         String packID = combinedPackInfo.substring(0, combinedPackInfo.indexOf("."));
                         String systemName = combinedPackInfo.substring(combinedPackInfo.indexOf(".") + 1);
                         AItemPack<?> packItem = PackParser.getItem(packID, systemName);
-                        resourcePath = PackResourceLoader.getPackResource(packItem.definition, ResourceType.ITEM_JSON, systemName);
+                        resourcePath = PackResourceLoader.getPackResource(packItem.definition, PackResourceLoader.ResourceType.ITEM_JSON, systemName);
 
                         //Try to load the item JSON, or create it if it doesn't exist.
                         stream = InterfaceManager.coreInterface.getPackResource(resourcePath);
                         if (stream == null) {
                             //Get the actual texture path.
-                            itemTexturePath = PackResourceLoader.getPackResource(packItem.definition, ResourceType.ITEM_PNG, systemName);
+                            itemTexturePath = PackResourceLoader.getPackResource(packItem.definition, PackResourceLoader.ResourceType.ITEM_PNG, systemName);
 
                             //Remove the "/assets/packID/" portion as it's implied with JSON.
                             itemTexturePath = itemTexturePath.substring(("/assets/" + packID + "/").length());
@@ -143,7 +138,7 @@ public class InterfaceEventsModelLoader {
 
                     if (packItem != null) {
                         //Get the actual resource path for this resource and return its stream.
-                        String streamLocation = PackResourceLoader.getPackResource(packItem.definition, isItemPNG ? ResourceType.ITEM_PNG : ResourceType.PNG, systemName);
+                        String streamLocation = PackResourceLoader.getPackResource(packItem.definition, isItemPNG ? PackResourceLoader.ResourceType.ITEM_PNG : PackResourceLoader.ResourceType.PNG, systemName);
                         stream = InterfaceManager.coreInterface.getPackResource(streamLocation);
 
                         if (stream == null) {
@@ -199,17 +194,17 @@ public class InterfaceEventsModelLoader {
         }
 
         @Override
-        public boolean hasResource(ResourcePackType type, ResourceLocation location) {
+        public boolean contains(ResourceType type, Identifier location) {
             return domains.contains(location.getNamespace()) && !location.getPath().contains("blockstates") && !location.getPath().contains("armatures") && !location.getPath().contains("mcmeta") && ((location.getPath().endsWith(".json") && !location.getPath().equals("sounds.json")) || location.getPath().endsWith(".png"));
         }
 
         @Override
-        public Set<String> getNamespaces(ResourcePackType pType) {
+        public Set<String> getNamespaces(ResourceType pType) {
             return domains;
         }
 
         @Override
-        public <T> T getMetadataSection(IMetadataSectionSerializer<T> pDeserializer) {
+        public <T> T parseMetadata(ResourceMetadataReader<T> pDeserializer) {
             return null;
         }
 
@@ -223,18 +218,18 @@ public class InterfaceEventsModelLoader {
         }
 
         @Override
-        public InputStream getRootResource(String pFileName) throws IOException {
+        public InputStream openRoot(String pFileName) throws IOException {
             if (!pFileName.contains("/") && !pFileName.contains("\\")) {
-                return this.getResource(ResourcePackType.CLIENT_RESOURCES, new ResourceLocation(domain, pFileName));
+                return this.open(ResourceType.CLIENT_RESOURCES, new Identifier(domain, pFileName));
             } else {
                 throw new IllegalArgumentException("Root resources can only be filenames, not paths (no / allowed!)");
             }
         }
 
         @Override
-        public Collection<ResourceLocation> getResources(ResourcePackType pType, String pNamespace, String pPath, int pMaxDepth, Predicate<String> pFilter) {
-            //We shouldn't never need this, our resources are on-demand.
-            return new ArrayList<ResourceLocation>();
+        public Collection<Identifier> findResources(ResourceType type, String namespace, String path, int maxDepth, Predicate<String> filter) {
+            //We shouldn't ever need this, our resources are on-demand.
+            return new ArrayList<>();
         }
     }
 }

@@ -1,29 +1,24 @@
 package mcinterface1165;
 
-import java.util.function.Supplier;
-
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
-
 import io.netty.buffer.ByteBuf;
-import minecrafttransportsimulator.mcinterface.AWrapperWorld;
-import minecrafttransportsimulator.mcinterface.IInterfacePacket;
-import minecrafttransportsimulator.mcinterface.IWrapperNBT;
-import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
-import minecrafttransportsimulator.mcinterface.InterfaceManager;
+import minecrafttransportsimulator.mcinterface.*;
 import minecrafttransportsimulator.packets.components.APacketBase;
-import net.minecraft.entity.player.ServerPlayerEntity;
-import net.minecraft.network.PacketBuffer;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.network.PacketByteBuf;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 import net.minecraftforge.fml.network.NetworkDirection;
 import net.minecraftforge.fml.network.NetworkEvent.Context;
 import net.minecraftforge.fml.network.NetworkRegistry;
 import net.minecraftforge.fml.network.PacketDistributor;
 import net.minecraftforge.fml.network.simple.SimpleChannel;
 
+import java.util.function.Supplier;
+
 class InterfacePacket implements IInterfacePacket {
     private static final String PROTOCOL_VERSION = "1";
-    private static final SimpleChannel network = NetworkRegistry.newSimpleChannel(new ResourceLocation(InterfaceLoader.MODID, "main"), () -> PROTOCOL_VERSION, PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals);
+    private static final SimpleChannel network = NetworkRegistry.newSimpleChannel(new Identifier(InterfaceLoader.MODID, "main"), () -> PROTOCOL_VERSION, PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals);
     private static final BiMap<Byte, Class<? extends APacketBase>> packetMappings = HashBiMap.create();
 
     /**
@@ -71,18 +66,18 @@ class InterfacePacket implements IInterfacePacket {
      * Used for handling packets arriving on the server.
      */
     private static AWrapperWorld getServerWorld(Supplier<Context> ctx) {
-        return WrapperWorld.getWrapperFor(ctx.get().getSender().level);
+        return WrapperWorld.getWrapperFor(ctx.get().getSender().world);
     }
 
     @Override
     public void writeDataToBuffer(IWrapperNBT data, ByteBuf buf) {
         //We know this will be a PacketBuffer, so we can cast rather than wrap.
-        ((PacketBuffer) buf).writeNbt(((WrapperNBT) data).tag);
+        ((PacketByteBuf) buf).writeNbt(((WrapperNBT) data).tag);
     }
 
     @Override
     public WrapperNBT readDataFromBuffer(ByteBuf buf) {
-        return new WrapperNBT(((PacketBuffer) buf).readNbt());
+        return new WrapperNBT(((PacketByteBuf) buf).readNbt());
     }
 
     /**
@@ -105,7 +100,7 @@ class InterfacePacket implements IInterfacePacket {
             this.packet = packet;
         }
 
-        public static WrapperPacket fromBytes(PacketBuffer buf) {
+        public static WrapperPacket fromBytes(PacketByteBuf buf) {
             byte packetIndex = buf.readByte();
             try {
                 Class<? extends APacketBase> packetClass = packetMappings.get(packetIndex);
@@ -116,7 +111,7 @@ class InterfacePacket implements IInterfacePacket {
             }
         }
 
-        public static void toBytes(WrapperPacket message, PacketBuffer buf) {
+        public static void toBytes(WrapperPacket message, PacketByteBuf buf) {
             message.packet.writeToBuffer(buf);
         }
 

@@ -1,12 +1,12 @@
 package mcinterface1165;
 
-import java.util.UUID;
-
 import io.netty.buffer.ByteBuf;
 import minecrafttransportsimulator.mcinterface.AWrapperWorld;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.packets.components.APacketPlayer;
 import net.minecraft.util.math.BlockPos;
+
+import java.util.UUID;
 
 /**
  * Packet used to request NBT data for entities from the server.  Used when an entity is first created
@@ -20,12 +20,12 @@ public class PacketEntityCSHandshakeClient extends APacketPlayer {
 
     public PacketEntityCSHandshakeClient(IWrapperPlayer player, ABuilderEntityBase builder) {
         super(player);
-        this.builderID = builder.getStringUUID();
+        this.builderID = builder.getUuidAsString();
     }
 
     public PacketEntityCSHandshakeClient(IWrapperPlayer player, BuilderTileEntity builder) {
         super(player);
-        this.builderID = builder.getBlockPos().getX() + "," + builder.getBlockPos().getY() + "," + builder.getBlockPos().getZ();
+        this.builderID = builder.getPos().getX() + "," + builder.getPos().getY() + "," + builder.getPos().getZ();
     }
 
     public PacketEntityCSHandshakeClient(ByteBuf buf) {

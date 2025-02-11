@@ -9,12 +9,12 @@
 		],
     "client": [
         "client.RenderInfoInvokerMixin",
-				"client.ClientPlayNetHandlerMixin",
+        "client.ClientPlayNetworkHandlerMixin",
 				"client.LanguageManagerMixin",
-				"client.ListenerMixin",
-				"client.SimpleReloadableResourceManagerMixin",
-				"client.BipedModelMixin",
-				"client.VillagerModelMixin",
+        "client.SoundListenerMixin",
+        "client.ReloadableResourceManagerImplMixin",
+        "client.BipedEntityModelMixin",
+        "client.VillagerResemblingModelMixin",
 				"client.WorldRendererMixin",
 				"client.MinecraftMixin"
     ],

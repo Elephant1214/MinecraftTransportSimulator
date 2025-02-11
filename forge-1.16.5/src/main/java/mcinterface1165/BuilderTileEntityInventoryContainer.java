@@ -3,15 +3,16 @@ package mcinterface1165;
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityInventoryProvider;
 import minecrafttransportsimulator.entities.instances.EntityInventoryContainer;
+import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.item.ItemStack;
-import net.minecraft.tileentity.TileEntityType;
-import net.minecraft.util.Direction;
+import net.minecraft.util.math.Direction;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.items.CapabilityItemHandler;
 import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.items.ItemHandlerHelper;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Builder for tile entities that contain inventories.  This builder ticks.
@@ -19,7 +20,7 @@ import net.minecraftforge.items.ItemHandlerHelper;
  * @author don_bruce
  */
 public class BuilderTileEntityInventoryContainer extends BuilderTileEntity implements IItemHandler {
-    protected static RegistryObject<TileEntityType<BuilderTileEntityInventoryContainer>> TE_TYPE2;
+    protected static RegistryObject<BlockEntityType<BuilderTileEntityInventoryContainer>> TE_TYPE2;
 
     private EntityInventoryContainer inventory;
 
@@ -35,16 +36,16 @@ public class BuilderTileEntityInventoryContainer extends BuilderTileEntity imple
 
     @Override
     public int getSlots() {
-        return inventory.getSize();
+        return this.inventory.getSize();
     }
 
     @Override
-    public ItemStack getStackInSlot(int index) {
-        return ((WrapperItemStack) inventory.getStack(index)).stack;
+    public @NotNull ItemStack getStackInSlot(int index) {
+        return ((WrapperItemStack) this.inventory.getStack(index)).stack;
     }
 
     @Override
-    public ItemStack extractItem(int slot, int amount, boolean simulate) {
+    public @NotNull ItemStack extractItem(int slot, int amount, boolean simulate) {
         ItemStack stack = getStackInSlot(slot);
         if (stack.getCount() < amount) {
             amount = stack.getCount();
@@ -53,16 +54,16 @@ public class BuilderTileEntityInventoryContainer extends BuilderTileEntity imple
         extracted.setCount(amount);
         if (!simulate) {
             stack.setCount(stack.getCount() - amount);
-            inventory.setStack(new WrapperItemStack(stack), slot);
+            this.inventory.setStack(new WrapperItemStack(stack), slot);
         }
         return extracted;
     }
 
     @Override
-    public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
+    public @NotNull ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
         ItemStack existingStack = getStackInSlot(slot);
         if (ItemHandlerHelper.canItemStacksStack(stack, existingStack)) {
-            int amount = existingStack.getMaxStackSize() - existingStack.getCount();
+            int amount = existingStack.getMaxCount() - existingStack.getCount();
             if (amount != 0) {
                 if (amount > stack.getCount()) {
                     amount = stack.getCount();
@@ -71,7 +72,7 @@ public class BuilderTileEntityInventoryContainer extends BuilderTileEntity imple
                 remainderStack.setCount(remainderStack.getCount() - amount);
                 if (!simulate) {
                     existingStack.setCount(existingStack.getCount() + amount);
-                    inventory.setStack(new WrapperItemStack(existingStack), slot);
+                    this.inventory.setStack(new WrapperItemStack(existingStack), slot);
                 }
                 return remainderStack;
             }
@@ -85,13 +86,13 @@ public class BuilderTileEntityInventoryContainer extends BuilderTileEntity imple
     }
 
     @Override
-    public boolean isItemValid(int slot, ItemStack stack) {
+    public boolean isItemValid(int slot, @NotNull ItemStack stack) {
         return true;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> capability, Direction facing) {
+    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> capability, Direction facing) {
         if (capability == CapabilityItemHandler.ITEM_HANDLER_CAPABILITY && (facing == Direction.UP || facing == Direction.DOWN)) {
             return LazyOptional.of(() -> (T) this);
         } else {

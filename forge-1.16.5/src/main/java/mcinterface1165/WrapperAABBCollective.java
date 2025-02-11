@@ -1,17 +1,17 @@
 package mcinterface1165;
 
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
-
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.BoundingBoxHitResult;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.entities.components.AEntityE_Interactable;
 import minecrafttransportsimulator.entities.components.AEntityF_Multipart;
 import minecrafttransportsimulator.jsondefs.JSONCollisionGroup.CollisionType;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * This class is essentially a collective list of BoundingBoxes.  It intercepts all AABB
@@ -21,7 +21,7 @@ import net.minecraft.util.math.vector.Vector3d;
  *
  * @author don_bruce
  */
-public class WrapperAABBCollective extends AxisAlignedBB {
+public class WrapperAABBCollective extends Box {
     private final AEntityE_Interactable<?> interactable;
     private final boolean collision;
     private final Set<BoundingBox> boxes = new HashSet<>();
@@ -50,7 +50,7 @@ public class WrapperAABBCollective extends AxisAlignedBB {
     }
 
     @Override
-    public WrapperAABBCollective inflate(double value) {
+    public WrapperAABBCollective expand(double value) {
         return this;
     }
 
@@ -68,15 +68,15 @@ public class WrapperAABBCollective extends AxisAlignedBB {
     }
 
     @Override
-    public boolean contains(Vector3d vec) {
+    public boolean contains(Vec3d vec) {
         return this.intersects(vec.x, vec.y, vec.z, vec.x, vec.y, vec.z);
     }
 
     @Override
-    public Optional<Vector3d> clip(Vector3d vecA, Vector3d vecB) {
+    public Optional<Vec3d> raycast(Vec3d min, Vec3d max) {
         //Check all the bounding boxes for collision to see if we hit one of them.
-        Point3D start = new Point3D(vecA.x, vecA.y, vecA.z);
-        Point3D end = new Point3D(vecB.x, vecB.y, vecB.z);
+        Point3D start = new Point3D(min.x, min.y, min.z);
+        Point3D end = new Point3D(max.x, max.y, max.z);
         BoundingBoxHitResult intersection = null;
         for (BoundingBox testBox : getBoxes()) {
             BoundingBoxHitResult testIntersection = testBox.getIntersection(start, end);
@@ -87,7 +87,7 @@ public class WrapperAABBCollective extends AxisAlignedBB {
             }
         }
         if (intersection != null) {
-            return Optional.of(new Vector3d(intersection.position.x, intersection.position.y, intersection.position.z));
+            return Optional.of(new Vec3d(intersection.position.x, intersection.position.y, intersection.position.z));
         } else {
             return Optional.empty();
         }
@@ -97,14 +97,14 @@ public class WrapperAABBCollective extends AxisAlignedBB {
      * Helper method that's akin to MC's older collision methods in 1.12.2, just here rather than
      * in a VoxelShape.
      */
-    public Vector3d getCollision(Vector3d movement, AxisAlignedBB testBox) {
+    public Vec3d getCollision(Vec3d movement, Box testBox) {
         double x = movement.x != 0 ? calculateXOffset(testBox, movement.x) : 0;
         double y = movement.y != 0 ? calculateYOffset(testBox, movement.y) : 0;
         double z = movement.z != 0 ? calculateZOffset(testBox, movement.z) : 0;
-        return new Vector3d(x, y, z);
+        return new Vec3d(x, y, z);
     }
 
-    private double calculateXOffset(AxisAlignedBB box, double offset) {
+    private double calculateXOffset(Box box, double offset) {
         for (BoundingBox testBox : getBoxes()) {
             if (box.maxY > testBox.globalCenter.y - testBox.heightRadius && box.minY < testBox.globalCenter.y + testBox.heightRadius && box.maxZ > testBox.globalCenter.z - testBox.depthRadius && box.minZ < testBox.globalCenter.z + testBox.depthRadius) {
                 if (offset > 0.0D) {
@@ -124,8 +124,8 @@ public class WrapperAABBCollective extends AxisAlignedBB {
         }
         return offset;
     }
-    
-    private double calculateYOffset(AxisAlignedBB box, double offset) {
+
+    private double calculateYOffset(Box box, double offset) {
         for (BoundingBox testBox : getBoxes()) {
             if (box.maxX > testBox.globalCenter.x - testBox.widthRadius && box.minX < testBox.globalCenter.x + testBox.widthRadius && box.maxZ > testBox.globalCenter.z - testBox.depthRadius && box.minZ < testBox.globalCenter.z + testBox.depthRadius) {
                 if (offset > 0.0D) {
@@ -145,8 +145,8 @@ public class WrapperAABBCollective extends AxisAlignedBB {
         }
         return offset;
     }
-    
-    private double calculateZOffset(AxisAlignedBB box, double offset) {
+
+    private double calculateZOffset(Box box, double offset) {
         for (BoundingBox testBox : getBoxes()) {
             if (box.maxX > testBox.globalCenter.x - testBox.widthRadius && box.minX < testBox.globalCenter.x + testBox.widthRadius && box.maxY > testBox.globalCenter.y - testBox.heightRadius && box.minY < testBox.globalCenter.y + testBox.heightRadius) {
                 if (offset > 0.0D) {

@@ -20,7 +20,7 @@ public interface IItemEntityProvider {
      */
     void registerEntities(Map<String, IItemEntityFactory> entityMap);
 
-    public static interface IItemEntityFactory {
+    interface IItemEntityFactory {
         AEntityB_Existing restoreEntityFromData(AWrapperWorld world, IWrapperNBT data);
     }
 }

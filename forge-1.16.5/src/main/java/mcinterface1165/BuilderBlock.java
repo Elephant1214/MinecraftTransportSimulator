@@ -1,12 +1,5 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.annotation.Nullable;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
@@ -16,30 +9,30 @@ import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityEne
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityFluidTankProvider;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityInventoryProvider;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
-import net.minecraft.block.AbstractBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockRenderType;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.material.Material;
-import net.minecraft.block.material.MaterialColor;
+import net.minecraft.block.*;
+import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.loot.LootContext;
-import net.minecraft.loot.LootParameters;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.ActionResultType;
-import net.minecraft.util.Direction;
+import net.minecraft.loot.context.LootContext;
+import net.minecraft.loot.context.LootContextParameters;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.BlockRayTraceResult;
-import net.minecraft.util.math.shapes.ISelectionContext;
-import net.minecraft.util.math.shapes.VoxelShape;
-import net.minecraft.util.math.shapes.VoxelShapes;
-import net.minecraft.world.IBlockReader;
-import net.minecraft.world.IWorld;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.util.shape.VoxelShapes;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldAccess;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Builder for a basic MC Block class.  This builder assumes the block will not be a solid
@@ -63,7 +56,7 @@ public class BuilderBlock extends Block {
     protected final ABlockBase block;
 
     BuilderBlock(ABlockBase block) {
-        super(AbstractBlock.Properties.of(Material.STONE, MaterialColor.STONE).strength(block.hardness, block.blastResistance).noOcclusion());
+        super(AbstractBlock.Settings.of(Material.STONE, MapColor.STONE_GRAY).strength(block.hardness, block.blastResistance).nonOpaque());
         this.block = block;
     }
 
@@ -75,7 +68,7 @@ public class BuilderBlock extends Block {
 
     @Nullable
     @Override
-    public TileEntity createTileEntity(BlockState state, IBlockReader world) {
+    public BlockEntity createTileEntity(BlockState state, BlockView world) {
         //Need to return a wrapper class here, not the actual TE.
         if (ITileEntityFluidTankProvider.class.isAssignableFrom(((ABlockBaseTileEntity) block).getTileEntityClass())) {
             return new BuilderTileEntityFluidTank();
@@ -90,43 +83,43 @@ public class BuilderBlock extends Block {
 
     @SuppressWarnings("deprecation")
     @Override
-    public ActionResultType use(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockRayTraceResult hit) {
+    public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
         //Forward this click to the block.  For left-clicks we'll need to use item attack calls.
         if (block instanceof ABlockBaseTileEntity) {
-            if (!world.isClientSide()) {
-                TileEntity tile = world.getBlockEntity(pos);
+            if (!world.isClient) {
+                BlockEntity tile = world.getBlockEntity(pos);
                 if (tile instanceof BuilderTileEntity) {
                     if (((BuilderTileEntity) tile).tileEntity != null) {
-                        return ((BuilderTileEntity) tile).tileEntity.interact(WrapperPlayer.getWrapperFor(player)) ? ActionResultType.CONSUME : ActionResultType.FAIL;
+                        return ((BuilderTileEntity) tile).tileEntity.interact(WrapperPlayer.getWrapperFor(player)) ? ActionResult.CONSUME : ActionResult.FAIL;
                     }
                 }
             } else {
-                return ActionResultType.CONSUME;
+                return ActionResult.CONSUME;
             }
         }
-        return super.use(state, world, pos, player, hand, hit);
+        return super.onUse(state, world, pos, player, hand, hit);
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    public BlockState updateShape(BlockState state, Direction facing, BlockState facingState, IWorld world, BlockPos pos, BlockPos facingPos) {
+    public BlockState getStateForNeighborUpdate(BlockState state, Direction direction, BlockState neighborState, WorldAccess world, BlockPos pos, BlockPos neighborPos) {
         //Forward the change of state of a neighbor to the tile if we have one.
-        if (block instanceof ABlockBaseTileEntity) {
-            if (!world.isClientSide()) {
-                TileEntity tile = world.getBlockEntity(pos);
-                if (tile instanceof BuilderTileEntity) {
-                    if (((BuilderTileEntity) tile).tileEntity != null) {
-                        ((BuilderTileEntity) tile).tileEntity.onNeighborChanged(new Point3D(facingPos.getX(), facingPos.getY(), facingPos.getZ()));
+        if (this.block instanceof ABlockBaseTileEntity) {
+            if (!world.isClient()) {
+                BlockEntity blockEntity = world.getBlockEntity(pos);
+                if (blockEntity instanceof BuilderTileEntity) {
+                    if (((BuilderTileEntity) blockEntity).tileEntity != null) {
+                        ((BuilderTileEntity) blockEntity).tileEntity.onNeighborChanged(new Point3D(neighborPos.getX(), neighborPos.getY(), neighborPos.getZ()));
                     }
                 }
             }
         }
-        return super.updateShape(state, facing, facingState, world, pos, facingPos);
+        return super.getStateForNeighborUpdate(state, direction, neighborState, world, pos, neighborPos);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public ItemStack getCloneItemStack(IBlockReader world, BlockPos pos, BlockState state) {
+    public ItemStack getPickStack(BlockView world, BlockPos pos, BlockState state) {
         //Returns the ItemStack that gets put in the player's inventory when they middle-click this block.
         //This calls down into getItem, which then uses the Item class's block<->item mapping to get a block.
         //By overriding here, we intercept those calls and return our own.  This also allows us to put NBT
@@ -134,8 +127,8 @@ public class BuilderBlock extends Block {
 
         //Note that this method is only used for middle-clicking and nothing else.  Failure to return valid results
         //here will result in air being grabbed, and no WAILA support.
-        if (block instanceof ABlockBaseTileEntity) {
-            TileEntity mcTile = world.getBlockEntity(pos);
+        if (this.block instanceof ABlockBaseTileEntity) {
+            BlockEntity mcTile = world.getBlockEntity(pos);
             if (mcTile instanceof BuilderTileEntity) {
                 ATileEntityBase<?> tile = ((BuilderTileEntity) mcTile).tileEntity;
                 if (tile != null) {
@@ -146,14 +139,14 @@ public class BuilderBlock extends Block {
                 }
             }
         }
-        return super.getCloneItemStack(world, pos, state);
+        return super.getPickStack(world, pos, state);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public List<ItemStack> getDrops(BlockState state, LootContext.Builder builder) {
+    public List<ItemStack> getDroppedStacks(BlockState state, LootContext.Builder builder) {
         //If this is a TE, drop TE drops.  Otherwise, drop normal drops.
-        TileEntity tile = builder.getOptionalParameter(LootParameters.BLOCK_ENTITY);
+        BlockEntity tile = builder.getNullable(LootContextParameters.BLOCK_ENTITY);
         if (tile instanceof BuilderTileEntity) {
             if (((BuilderTileEntity) tile).tileEntity != null) {
                 List<ItemStack> convertedDrops = new ArrayList<>();
@@ -161,34 +154,34 @@ public class BuilderBlock extends Block {
                 return convertedDrops;
             }
         }
-        return super.getDrops(state, builder);
+        return super.getDroppedStacks(state, builder);
     }
 
     @SuppressWarnings("deprecation")
     @Override
-    public void onRemove(BlockState state, World world, BlockPos pos, BlockState newState, boolean isMoving) {
+    public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean isMoving) {
         //Forward the breaking call to the block to allow for breaking logic.
-        block.onBroken(WrapperWorld.getWrapperFor(world), new Point3D(pos.getX(), pos.getY(), pos.getZ()));
-        super.onRemove(state, world, pos, newState, isMoving);
+        this.block.onBroken(WrapperWorld.getWrapperFor(world), new Point3D(pos.getX(), pos.getY(), pos.getZ()));
+        super.onStateReplaced(state, world, pos, newState, isMoving);
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    public VoxelShape getShape(BlockState state, IBlockReader world, BlockPos pos, ISelectionContext context) {
+    public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
         //Gets the bounding boxes. We forward this call to the tile entity to handle if we have one.
         //Otherwise, get the bounds from the main block, or just the standard bounds.
         //We add-on 0.5D to offset the box to the correct location, as our blocks are centered.
         //Bounding boxes are not offset, whereas collision are, which is what the boolean parameter is for.
-        if (block instanceof ABlockBaseTileEntity) {
-            TileEntity mcTile = world.getBlockEntity(pos);
+        if (this.block instanceof ABlockBaseTileEntity) {
+            BlockEntity mcTile = world.getBlockEntity(pos);
             if (mcTile instanceof BuilderTileEntity) {
                 ATileEntityBase<?> tile = ((BuilderTileEntity) mcTile).tileEntity;
                 if (tile != null) {
-                    return VoxelShapes.create(WrapperWorld.convertWithOffset(tile.boundingBox, -pos.getX(), -pos.getY(), -pos.getZ()));
+                    return VoxelShapes.cuboid(WrapperWorld.convertWithOffset(tile.boundingBox, -pos.getX(), -pos.getY(), -pos.getZ()));
                 }
             }
         } else if (block instanceof BlockCollision) {
-            return VoxelShapes.create(WrapperWorld.convert(((BlockCollision) block).blockBounds));
+            return VoxelShapes.cuboid(WrapperWorld.convert(((BlockCollision) block).blockBounds));
         }
         //Return empty here, since we don't every want to be considered a full block as it does bad lighting.
         //When we get our TE data, then we can use that for the actual collision.
@@ -197,15 +190,15 @@ public class BuilderBlock extends Block {
 
     @Override
     @SuppressWarnings("deprecation")
-    public BlockRenderType getRenderShape(BlockState state) {
+    public BlockRenderType getRenderType(BlockState state) {
         //Don't render this block.  We manually render via the TE.
         return BlockRenderType.INVISIBLE;
     }
 
     @Override
-    public int getLightValue(BlockState state, IBlockReader world, BlockPos pos) {
-        if (block instanceof ABlockBaseTileEntity) {
-            TileEntity tile = world.getBlockEntity(pos);
+    public int getLightValue(BlockState state, BlockView world, BlockPos pos) {
+        if (this.block instanceof ABlockBaseTileEntity) {
+            BlockEntity tile = world.getBlockEntity(pos);
             if (tile instanceof BuilderTileEntity) {
                 if (((BuilderTileEntity) tile).tileEntity != null) {
                     return (int) (((BuilderTileEntity) tile).tileEntity.getLightProvided() * 15);

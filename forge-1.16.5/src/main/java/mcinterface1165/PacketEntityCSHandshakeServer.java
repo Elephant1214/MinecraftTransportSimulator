@@ -1,12 +1,12 @@
 package mcinterface1165;
 
-import java.util.UUID;
-
 import io.netty.buffer.ByteBuf;
 import minecrafttransportsimulator.mcinterface.AWrapperWorld;
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import minecrafttransportsimulator.packets.components.APacketBase;
 import net.minecraft.util.math.BlockPos;
+
+import java.util.UUID;
 
 /**
  * Packet used to send NBT data to clients when requested for it.  Driven by the arrival of a
@@ -21,13 +21,13 @@ public class PacketEntityCSHandshakeServer extends APacketBase {
 
     public PacketEntityCSHandshakeServer(ABuilderEntityBase builder, IWrapperNBT data) {
         super(null);
-        this.builderID = builder.getStringUUID();
+        this.builderID = builder.getUuidAsString();
         this.data = data;
     }
 
     public PacketEntityCSHandshakeServer(BuilderTileEntity builder, IWrapperNBT data) {
         super(null);
-        this.builderID = builder.getBlockPos().getX() + "," + builder.getBlockPos().getY() + "," + builder.getBlockPos().getZ();
+        this.builderID = builder.getPos().getX() + "," + builder.getPos().getY() + "," + builder.getPos().getZ();
         this.data = data;
     }
 

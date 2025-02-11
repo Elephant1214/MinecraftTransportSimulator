@@ -1,26 +1,12 @@
 package mcinterface1165;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map.Entry;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import minecrafttransportsimulator.blocks.components.ABlockBase;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
 import minecrafttransportsimulator.blocks.instances.BlockCollision;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityEnergyCharger;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityFluidTankProvider;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityInventoryProvider;
-import minecrafttransportsimulator.items.components.AItemBase;
-import minecrafttransportsimulator.items.components.AItemPack;
-import minecrafttransportsimulator.items.components.AItemSubTyped;
-import minecrafttransportsimulator.items.components.IItemBlock;
-import minecrafttransportsimulator.items.components.IItemEntityProvider;
-import minecrafttransportsimulator.items.components.IItemFood;
+import minecrafttransportsimulator.items.components.*;
 import minecrafttransportsimulator.items.instances.ItemItem;
 import minecrafttransportsimulator.jsondefs.JSONPack;
 import minecrafttransportsimulator.mcinterface.IInterfaceCore;
@@ -28,17 +14,25 @@ import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.packloading.PackParser;
 import minecrafttransportsimulator.systems.ConfigSystem;
 import minecrafttransportsimulator.systems.LanguageSystem;
-import net.minecraft.entity.EntityClassification;
+import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.EntityType;
-import net.minecraft.item.Food;
+import net.minecraft.entity.SpawnGroup;
+import net.minecraft.item.FoodComponent;
 import net.minecraft.item.Item;
-import net.minecraft.tileentity.TileEntityType;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLConstructModEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.loading.FMLPaths;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map.Entry;
 
 /**
  * Loader interface for the mod.  This class is not actually an interface, unlike everything else.
@@ -52,7 +46,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 public class InterfaceLoader {
     public static final String MODID = "mts";
     public static final String MODNAME = "Immersive Vehicles (MTS)";
-    public static final String MODVER = "22.17.0";
+    public static final String MODVER = "${version}";
 
     public static final Logger LOGGER = LogManager.getLogger(InterfaceManager.coreModID);
     private final String gameDirectory;
@@ -64,11 +58,11 @@ public class InterfaceLoader {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onPostConstruction);
     }
 
-    /**Need to defer init until post-mod construction, as in this version
+    /**
+     * Need to defer init until post-mod construction, as in this version
      * {@link IInterfaceCore#getModName(String)} requires a constructor pack-mod
      * instance to query the classloader for a resource, and we need that for pack
      * init in the boot calls.
-     * 
      */
     public void init(FMLConstructModEvent event) {
         //Add registries.
@@ -110,7 +104,7 @@ public class InterfaceLoader {
         for (String packID : PackParser.getAllPackIDs()) {
             for (AItemPack<?> item : PackParser.getAllItemsForPack(packID, true)) {
                 if (item.autoGenerate()) {
-                    Item.Properties itemProperties = new Item.Properties();
+                    Item.Settings itemProperties = new Item.Settings();
 
                     //Check if the creative tab is set/created.
                     //The only except is for "invisible" parts of the core mod, these are internal.
@@ -122,12 +116,12 @@ public class InterfaceLoader {
                             AItemPack<?> tabItem = packConfiguration.packItem != null ? PackParser.getItem(packConfiguration.packID, packConfiguration.packItem) : null;
                             BuilderCreativeTab.createdTabs.put(tabID, new BuilderCreativeTab(packConfiguration.packName, tabItem));
                         }
-                        itemProperties.tab(BuilderCreativeTab.createdTabs.get(tabID));
+                        itemProperties.group(BuilderCreativeTab.createdTabs.get(tabID));
                     }
-                    itemProperties.stacksTo(item.getStackSize());
+                    itemProperties.maxCount(item.getStackSize());
                     if (item instanceof ItemItem && ((ItemItem) item).definition.food != null) {
                         IItemFood food = (IItemFood) item;
-                        itemProperties.food(new Food.Builder().nutrition(food.getHungerAmount()).saturationMod(food.getSaturationAmount()).build());
+                        itemProperties.food(new FoodComponent.Builder().hunger(food.getHungerAmount()).saturationModifier(food.getSaturationAmount()).build());
                     }
                     new BuilderItem(itemProperties, item);
                 }
@@ -211,15 +205,15 @@ public class InterfaceLoader {
             }
         });
 
-        BuilderTileEntity.TE_TYPE = BuilderTileEntity.TILE_ENTITIES.register("builder_base", () -> TileEntityType.Builder.of(BuilderTileEntity::new, normalBlocks.toArray(new BuilderBlock[0])).build(null));
-        BuilderTileEntityFluidTank.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_fluidtank", () -> TileEntityType.Builder.of(BuilderTileEntityFluidTank::new, fluidBlocks.toArray(new BuilderBlock[0])).build(null));
-        BuilderTileEntityInventoryContainer.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_inventory", () -> TileEntityType.Builder.of(BuilderTileEntityInventoryContainer::new, inventoryBlocks.toArray(new BuilderBlock[0])).build(null));
-        BuilderTileEntityEnergyCharger.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_charger", () -> TileEntityType.Builder.of(BuilderTileEntityEnergyCharger::new, chargerBlocks.toArray(new BuilderBlock[0])).build(null));
+        BuilderTileEntity.TE_TYPE = BuilderTileEntity.TILE_ENTITIES.register("builder_base", () -> BlockEntityType.Builder.create(BuilderTileEntity::new, normalBlocks.toArray(new BuilderBlock[0])).build(null));
+        BuilderTileEntityFluidTank.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_fluidtank", () -> BlockEntityType.Builder.create(BuilderTileEntityFluidTank::new, fluidBlocks.toArray(new BuilderBlock[0])).build(null));
+        BuilderTileEntityInventoryContainer.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_inventory", () -> BlockEntityType.Builder.create(BuilderTileEntityInventoryContainer::new, inventoryBlocks.toArray(new BuilderBlock[0])).build(null));
+        BuilderTileEntityEnergyCharger.TE_TYPE2 = BuilderTileEntity.TILE_ENTITIES.register("builder_charger", () -> BlockEntityType.Builder.create(BuilderTileEntityEnergyCharger::new, chargerBlocks.toArray(new BuilderBlock[0])).build(null));
 
         //Init entities.
-        BuilderEntityExisting.E_TYPE2 = ABuilderEntityBase.ENTITIES.register("builder_existing", () -> EntityType.Builder.<BuilderEntityExisting>of(BuilderEntityExisting::new, EntityClassification.MISC).sized(0.05F, 0.05F).clientTrackingRange(32 * 16).updateInterval(5).build("builder_existing"));
-        BuilderEntityLinkedSeat.E_TYPE3 = ABuilderEntityBase.ENTITIES.register("builder_seat", () -> EntityType.Builder.<BuilderEntityLinkedSeat>of(BuilderEntityLinkedSeat::new, EntityClassification.MISC).sized(0.05F, 0.05F).clientTrackingRange(32 * 16).updateInterval(5).build("builder_seat"));
-        BuilderEntityRenderForwarder.E_TYPE4 = ABuilderEntityBase.ENTITIES.register("builder_rendering", () -> EntityType.Builder.<BuilderEntityRenderForwarder>of(BuilderEntityRenderForwarder::new, EntityClassification.MISC).sized(0.05F, 0.05F).clientTrackingRange(32 * 16).updateInterval(5).build("builder_rendering"));
+        BuilderEntityExisting.E_TYPE2 = ABuilderEntityBase.ENTITIES.register("builder_existing", () -> EntityType.Builder.<BuilderEntityExisting>create(BuilderEntityExisting::new, SpawnGroup.MISC).setDimensions(0.05F, 0.05F).maxTrackingRange(32 * 16).setUpdateInterval(5).build("builder_existing"));
+        BuilderEntityLinkedSeat.E_TYPE3 = ABuilderEntityBase.ENTITIES.register("builder_seat", () -> EntityType.Builder.<BuilderEntityLinkedSeat>create(BuilderEntityLinkedSeat::new, SpawnGroup.MISC).setDimensions(0.05F, 0.05F).maxTrackingRange(32 * 16).setUpdateInterval(5).build("builder_seat"));
+        BuilderEntityRenderForwarder.E_TYPE4 = ABuilderEntityBase.ENTITIES.register("builder_rendering", () -> EntityType.Builder.<BuilderEntityRenderForwarder>create(BuilderEntityRenderForwarder::new, SpawnGroup.MISC).setDimensions(0.05F, 0.05F).maxTrackingRange(32 * 16).setUpdateInterval(5).build("builder_rendering"));
 
         //Iterate over all pack items and find those that spawn entities.
         for (AItemPack<?> packItem : PackParser.getAllPackItems()) {

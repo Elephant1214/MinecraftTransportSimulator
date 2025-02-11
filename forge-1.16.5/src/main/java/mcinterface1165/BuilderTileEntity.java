@@ -1,8 +1,5 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.blocks.components.ABlockBaseTileEntity;
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
@@ -10,13 +7,16 @@ import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.block.BlockState;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.tileentity.ITickableTileEntity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityType;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.Tickable;
 import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Builder for the MC Tile Entity class   This class interfaces with all the MC-specific
@@ -33,10 +33,10 @@ import net.minecraftforge.registries.ForgeRegistries;
  *
  * @author don_bruce
  */
-public class BuilderTileEntity extends TileEntity implements ITickableTileEntity {
-    protected static final DeferredRegister<TileEntityType<?>> TILE_ENTITIES = DeferredRegister.create(ForgeRegistries.TILE_ENTITIES, InterfaceLoader.MODID);
-    protected static RegistryObject<TileEntityType<BuilderTileEntity>> TE_TYPE;
-    
+public class BuilderTileEntity extends BlockEntity implements Tickable {
+    protected static final DeferredRegister<BlockEntityType<?>> TILE_ENTITIES = DeferredRegister.create(ForgeRegistries.TILE_ENTITIES, InterfaceLoader.MODID);
+    protected static RegistryObject<BlockEntityType<BuilderTileEntity>> TE_TYPE;
+
     protected ATileEntityBase<?> tileEntity;
 
     /**
@@ -49,7 +49,7 @@ public class BuilderTileEntity extends TileEntity implements ITickableTileEntity
      * to do their funky logic.  I'm looking at YOU The One Probe!  This should be either set by NBT loaded from disk
      * on servers, or set by packet on clients.
      */
-    protected CompoundNBT lastLoadedNBT;
+    protected NbtCompound lastLoadedNBT;
     /**
      * Set to true when NBT is loaded on servers from disk, or when NBT arrives from clients on servers.  This is set on the update loop when data is
      * detected from server NBT loading, but for clients this is set when a data packet arrives.  This prevents loading client-based NBT before
@@ -72,7 +72,7 @@ public class BuilderTileEntity extends TileEntity implements ITickableTileEntity
         //Blank constructor for MC.
     }
 
-    public BuilderTileEntity(TileEntityType<?> teType) {
+    public BuilderTileEntity(BlockEntityType<?> teType) {
         super(teType);
         //Override type constructor.
     }
@@ -80,55 +80,55 @@ public class BuilderTileEntity extends TileEntity implements ITickableTileEntity
     @Override
     public void tick() {
         //World and pos might be null on first few scans.
-        if (level != null && worldPosition != null) {
-            if (tileEntity != null) {
-                //Do nothing.  We handle updates on the main loop.
-            } else if (!loadedFromSavedNBT) {
+        if (this.world != null && this.pos != null) {
+            if (this.tileEntity != null && !this.loadedFromSavedNBT) {
                 //If we are on the server, set the NBT flag.
-                if (lastLoadedNBT != null && !level.isClientSide) {
-                    loadFromSavedNBT = true;
+                if (this.lastLoadedNBT != null && !this.world.isClient) {
+                    this.loadFromSavedNBT = true;
                 }
 
                 //If we have NBT, and haven't loaded it, do so now.
                 //Hold off on loading until blocks load: this can take longer than 1 update if the server/client is laggy.
-                if (loadFromSavedNBT && level.isLoaded(worldPosition)) {
+                if (this.loadFromSavedNBT && this.world.isAreaLoaded(this.pos, 0)) {
                     try {
                         //Get the block that makes this TE and restore it from saved state.
-                        WrapperWorld worldWrapper = WrapperWorld.getWrapperFor(level);
-                        Point3D position = new Point3D(worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
+                        WrapperWorld worldWrapper = WrapperWorld.getWrapperFor(this.world);
+                        Point3D position = new Point3D(this.pos.getX(), this.pos.getY(), this.pos.getZ());
                         ABlockBaseTileEntity block = (ABlockBaseTileEntity) worldWrapper.getBlock(position);
-                        IWrapperNBT data = new WrapperNBT(lastLoadedNBT);
+                        IWrapperNBT data = new WrapperNBT(this.lastLoadedNBT);
                         setTileEntity(block.createTileEntity(worldWrapper, position, null, data.getPackItem(), data));
-                        tileEntity.world.addEntity(tileEntity);
-                        loadedFromSavedNBT = true;
-                        lastLoadedNBT = null;
+                        this.tileEntity.world.addEntity(this.tileEntity);
+                        this.loadedFromSavedNBT = true;
+                        this.lastLoadedNBT = null;
                     } catch (Exception e) {
                         InterfaceManager.coreInterface.logError("Failed to load tile entity on builder from saved NBT.  Did a pack change?");
                         InterfaceManager.coreInterface.logError(e.getMessage());
-                        level.removeBlock(worldPosition, false);
+                        this.world.removeBlock(pos, false);
                     }
                 }
             }
 
             //Now that we have done update/NBT stuff, check for syncing.
-            if (level.isClientSide) {
+            if (this.world.isClient) {
                 //No data.  Wait for NBT to be loaded.
                 //As we are on a client we need to send a packet to the server to request NBT data.
                 ///Although we could call this in the constructor, Minecraft changes the
                 //entity IDs after spawning and that fouls things up.
-                if (needDataFromServer) {
+                if (this.needDataFromServer) {
                     InterfaceManager.packetInterface.sendToServer(new PacketEntityCSHandshakeClient(InterfaceManager.clientInterface.getClientPlayer(), this));
-                    needDataFromServer = false;
+                    this.needDataFromServer = false;
                 }
             } else {
                 //Send any packets to clients that requested them.
-                if (!playersRequestingData.isEmpty()) {
-                    for (IWrapperPlayer player : playersRequestingData) {
-                        IWrapperNBT data = InterfaceManager.coreInterface.getNewNBTWrapper();
-                        save(((WrapperNBT) data).tag);
+                if (!this.playersRequestingData.isEmpty()) {
+                    IWrapperNBT data = InterfaceManager.coreInterface.getNewNBTWrapper();
+                    writeNbt(((WrapperNBT) data).tag);
+
+                    for (IWrapperPlayer player : this.playersRequestingData) {
                         player.sendPacket(new PacketEntityCSHandshakeServer(this, data));
+
                     }
-                    playersRequestingData.clear();
+                    this.playersRequestingData.clear();
                 }
             }
         }
@@ -142,11 +142,11 @@ public class BuilderTileEntity extends TileEntity implements ITickableTileEntity
     }
 
     @Override
-    public void setRemoved() {
-        super.setRemoved();
+    public void markRemoved() {
+        super.markRemoved();
         //Invalidate happens when we break the block this TE is on.
-        if (tileEntity != null) {
-            tileEntity.remove();
+        if (this.tileEntity != null) {
+            this.tileEntity.remove();
         }
     }
 
@@ -155,29 +155,29 @@ public class BuilderTileEntity extends TileEntity implements ITickableTileEntity
         super.onChunkUnloaded();
         //Catch unloaded TEs from when the chunk goes away and kill them.
         //MC forgets to do this normally.
-        if (tileEntity != null && tileEntity.isValid) {
-            setRemoved();
+        if (this.tileEntity != null && this.tileEntity.isValid) {
+            markRemoved();
         }
     }
 
     @Override
-    public void load(BlockState state, CompoundNBT tag) {
-        super.load(state, tag);
+    public void fromTag(BlockState state, NbtCompound tag) {
+        super.fromTag(state, tag);
         //Don't directly load the TE here.  This causes issues because Minecraft loads TEs before blocks.
         //This is horridly stupid, because then you can't get the block for the TE, but whatever, Mojang be Mojang.
-        lastLoadedNBT = tag;
+        this.lastLoadedNBT = tag;
     }
 
     @Override
-    public CompoundNBT save(CompoundNBT tag) {
-        super.save(tag);
-        if (tileEntity != null) {
-            tileEntity.save(new WrapperNBT(tag));
-        } else if (lastLoadedNBT != null) {
+    public NbtCompound writeNbt(NbtCompound tag) {
+        super.writeNbt(tag);
+        if (this.tileEntity != null) {
+            this.tileEntity.save(new WrapperNBT(tag));
+        } else if (this.lastLoadedNBT != null) {
             //Need to have this here as some mods will load us from NBT and then save us back
             //without ticking.  This causes data loss if we don't merge the last loaded NBT tag.
             //If we did tick, then the last loaded will be null and this doesn't apply.
-            tag = lastLoadedNBT;
+            tag = this.lastLoadedNBT;
         }
         return tag;
     }

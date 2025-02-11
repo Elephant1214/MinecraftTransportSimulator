@@ -1,46 +1,42 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
-import net.minecraft.inventory.ItemStackHelper;
+import net.minecraft.inventory.Inventories;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.util.NonNullList;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.collection.DefaultedList;
+
+import java.util.*;
 
 class WrapperNBT implements IWrapperNBT {
-    protected final CompoundNBT tag;
+    protected final NbtCompound tag;
 
     protected WrapperNBT() {
-        this.tag = new CompoundNBT();
+        this.tag = new NbtCompound();
     }
 
-    protected WrapperNBT(CompoundNBT tag) {
+    protected WrapperNBT(NbtCompound tag) {
         this.tag = tag;
     }
 
     @Override
     public boolean equals(Object obj) {
-        return obj instanceof WrapperNBT && tag.equals(((WrapperNBT) obj).tag);
+        return obj instanceof WrapperNBT && this.tag.equals(((WrapperNBT) obj).tag);
     }
 
     @Override
     public boolean getBoolean(String name) {
-        return tag.getBoolean(name);
+        return this.tag.getBoolean(name);
     }
 
     @Override
     public void setBoolean(String name, boolean value) {
         if (value) {
-            tag.putBoolean(name, value);
+            this.tag.putBoolean(name, value);
         } else {
-            tag.remove(name);
+            this.tag.remove(name);
         }
     }
 
@@ -118,8 +114,8 @@ class WrapperNBT implements IWrapperNBT {
     @Override
     public List<IWrapperItemStack> getStacks(int count) {
         List<IWrapperItemStack> stacks = new ArrayList<>();
-        NonNullList<ItemStack> mcList = NonNullList.withSize(count, ItemStack.EMPTY);
-        ItemStackHelper.loadAllItems(tag, mcList);
+        DefaultedList<ItemStack> mcList = DefaultedList.ofSize(count, ItemStack.EMPTY);
+        Inventories.readNbt(this.tag, mcList);
         for (ItemStack stack : mcList) {
             stacks.add(new WrapperItemStack(stack));
         }
@@ -128,11 +124,11 @@ class WrapperNBT implements IWrapperNBT {
 
     @Override
     public void setStacks(List<IWrapperItemStack> stacks) {
-        NonNullList<ItemStack> mcList = NonNullList.create();
+        DefaultedList<ItemStack> mcList = DefaultedList.of();
         for (IWrapperItemStack stack : stacks) {
             mcList.add(((WrapperItemStack) stack).stack);
         }
-        ItemStackHelper.saveAllItems(tag, mcList);
+        Inventories.writeNbt(this.tag, mcList);
     }
 
     @Override
@@ -209,26 +205,26 @@ class WrapperNBT implements IWrapperNBT {
 
     @Override
     public WrapperNBT getData(String name) {
-        return tag.contains(name, 10) ? new WrapperNBT(tag.getCompound(name)) : null;
+        return this.tag.contains(name, 10) ? new WrapperNBT(this.tag.getCompound(name)) : null;
     }
 
     @Override
     public void setData(String name, IWrapperNBT value) {
-        tag.put(name, ((WrapperNBT) value).tag);
+        this.tag.put(name, ((WrapperNBT) value).tag);
     }
 
     @Override
     public boolean hasKey(String name) {
-        return tag.contains(name);
+        return this.tag.contains(name);
     }
 
     @Override
     public void deleteEntry(String name) {
-        tag.remove(name);
+        this.tag.remove(name);
     }
 
     @Override
     public Set<String> getAllNames() {
-        return tag.getAllKeys();
+        return this.tag.getKeys();
     }
 }

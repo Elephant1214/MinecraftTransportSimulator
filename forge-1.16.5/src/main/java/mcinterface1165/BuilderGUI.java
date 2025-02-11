@@ -1,26 +1,25 @@
 package mcinterface1165;
 
-import org.lwjgl.glfw.GLFW;
-
 import minecrafttransportsimulator.guis.components.AGUIBase;
 import minecrafttransportsimulator.guis.components.AGUIComponent;
 import minecrafttransportsimulator.guis.components.GUIComponentTextBox;
 import minecrafttransportsimulator.guis.components.GUIComponentTextBox.TextBoxControlKey;
-import net.minecraft.client.audio.SimpleSound;
-import net.minecraft.client.gui.fonts.TextInputUtil;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.util.SoundEvents;
-import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.client.util.SelectionManager;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.LiteralText;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Builder for MC GUI classes.  Created when {@link InterfaceClient#setActiveGUI(AGUIBase)}}
- * is called to open a GUI.  This builer is purely to handle input forwarding and game pause
+ * is called to open a GUI.  This builder is purely to handle input forwarding and game pause
  * requests and does no actual rendering as that's left for non-GUI generic rendering code.
  *
  * @author don_bruce
  */
 public class BuilderGUI extends Screen {
-    private int lastKeycodePresed;
+    private int lastKeycodePressed;
 
     /**
      * Current gui we are built around.
@@ -28,7 +27,7 @@ public class BuilderGUI extends Screen {
     public final AGUIBase gui;
 
     public BuilderGUI(AGUIBase gui) {
-        super(new StringTextComponent(""));
+        super(new LiteralText(""));
         this.gui = gui;
     }
 
@@ -40,8 +39,8 @@ public class BuilderGUI extends Screen {
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int mouseButton) {
-        if (gui.onClick((int) mouseX, (int) mouseY)) {
-            minecraft.getSoundManager().play(SimpleSound.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+        if (this.gui.onClick((int) mouseX, (int) mouseY)) {
+            this.client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
             return true;
         } else {
             return false;
@@ -56,7 +55,7 @@ public class BuilderGUI extends Screen {
      */
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        gui.onRelease();
+        this.gui.onRelease();
         return true;
     }
 
@@ -67,15 +66,15 @@ public class BuilderGUI extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (!super.keyPressed(keyCode, scanCode, modifiers)) {
-            lastKeycodePresed = keyCode;
-            for (AGUIComponent component : gui.components) {
+            this.lastKeycodePressed = keyCode;
+            for (AGUIComponent component : this.gui.components) {
                 if (component instanceof GUIComponentTextBox) {
                     GUIComponentTextBox textBox = (GUIComponentTextBox) component;
                     if (textBox.focused) {
                         //If we did a paste from the clipboard, we need to replace everything in the box.
                         //Otherwise, just send the char for further processing.
                         if (isPaste(keyCode)) {
-                            textBox.setText(TextInputUtil.getClipboardContents(minecraft));
+                            textBox.setText(SelectionManager.getClipboard(this.client));
                         } else {
                             char key = 0;
                             switch (keyCode) {
@@ -112,11 +111,11 @@ public class BuilderGUI extends Screen {
     @Override
     public boolean charTyped(char key, int modifiers) {
         if (!super.charTyped(key, modifiers)) {
-            for (AGUIComponent component : gui.components) {
+            for (AGUIComponent component : this.gui.components) {
                 if (component instanceof GUIComponentTextBox) {
                     GUIComponentTextBox textBox = (GUIComponentTextBox) component;
                     if (textBox.focused) {
-                        textBox.handleKeyTyped(key, lastKeycodePresed, null);
+                        textBox.handleKeyTyped(key, this.lastKeycodePressed, null);
                         return true;
                     }
                 }
@@ -132,13 +131,13 @@ public class BuilderGUI extends Screen {
         //Forward close event as this comes from an ESC key that we don't see.
         //Need to check if GUI is active in case we get multiple events.
         //This lets us close our GUI, and the builder in one clean sweep.
-        if (AGUIBase.activeGUIs.contains(gui)) {
-            gui.close();
+        if (AGUIBase.activeGUIs.contains(this.gui)) {
+            this.gui.close();
         }
     }
 
     @Override
     public boolean isPauseScreen() {
-        return gui.pauseOnOpen();
+        return this.gui.pauseOnOpen();
     }
 }

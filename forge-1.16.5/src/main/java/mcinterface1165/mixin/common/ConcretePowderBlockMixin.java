@@ -8,6 +8,6 @@ import net.minecraft.block.ConcretePowderBlock;
 
 @Mixin(ConcretePowderBlock.class)
 public interface ConcretePowderBlockMixin {
-    @Accessor("concrete")
-    BlockState getConcrete();
+    @Accessor("hardenedState")
+    BlockState getHardenedState();
 }

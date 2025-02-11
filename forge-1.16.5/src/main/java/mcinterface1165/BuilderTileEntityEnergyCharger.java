@@ -3,13 +3,14 @@ package mcinterface1165;
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityEnergyCharger;
 import minecrafttransportsimulator.systems.ConfigSystem;
-import net.minecraft.tileentity.TileEntityType;
-import net.minecraft.util.Direction;
+import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.util.math.Direction;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.energy.CapabilityEnergy;
 import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.fml.RegistryObject;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Builder for tile entities that transform MC energy into power for other entities.
@@ -17,7 +18,7 @@ import net.minecraftforge.fml.RegistryObject;
  * @author don_bruce
  */
 public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements IEnergyStorage {
-    protected static RegistryObject<TileEntityType<BuilderTileEntityEnergyCharger>> TE_TYPE2;
+    protected static RegistryObject<BlockEntityType<BuilderTileEntityEnergyCharger>> TE_TYPE2;
 
     private ITileEntityEnergyCharger charger;
     private static final int MAX_BUFFER = 1000;
@@ -36,18 +37,18 @@ public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements
     @Override
     public void tick() {
         super.tick();
-        if (!level.isClientSide && charger != null) {
+        if (!this.world.isClient && this.charger != null) {
             //Try and charge the internal TE.
-            if (buffer > 0) {
-                double amountToCharge = charger.getChargeAmount();
+            if (this.buffer > 0) {
+                double amountToCharge = this.charger.getChargeAmount();
                 if (amountToCharge != 0) {
                     int amountToRemoveFromBuffer = (int) (amountToCharge / ConfigSystem.settings.general.rfToElectricityFactor.value);
-                    if (amountToRemoveFromBuffer > buffer) {
-                        amountToRemoveFromBuffer = buffer;
+                    if (amountToRemoveFromBuffer > this.buffer) {
+                        amountToRemoveFromBuffer = this.buffer;
                         amountToCharge = amountToRemoveFromBuffer * ConfigSystem.settings.general.rfToElectricityFactor.value;
                     }
-                    charger.chargeEnergy(amountToCharge);
-                    buffer -= amountToRemoveFromBuffer;
+                    this.charger.chargeEnergy(amountToCharge);
+                    this.buffer -= amountToRemoveFromBuffer;
                 }
             }
         }
@@ -55,7 +56,7 @@ public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements
 
     @Override
     public int receiveEnergy(int maxReceive, boolean simulate) {
-        if (buffer == MAX_BUFFER) {
+        if (this.buffer == MAX_BUFFER) {
             return 0;
         } else {
             int amountToStore = MAX_BUFFER - buffer;
@@ -63,7 +64,7 @@ public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements
                 amountToStore = maxReceive;
             }
             if (!simulate) {
-                buffer += amountToStore;
+                this.buffer += amountToStore;
             }
             return amountToStore;
         }
@@ -76,7 +77,7 @@ public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements
 
     @Override
     public int getEnergyStored() {
-        return buffer;
+        return this.buffer;
     }
 
     @Override
@@ -96,7 +97,7 @@ public class BuilderTileEntityEnergyCharger extends BuilderTileEntity implements
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> capability, Direction facing) {
+    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> capability, Direction facing) {
         if (capability == CapabilityEnergy.ENERGY && facing != null) {
             return LazyOptional.of(() -> (T) this);
         } else {

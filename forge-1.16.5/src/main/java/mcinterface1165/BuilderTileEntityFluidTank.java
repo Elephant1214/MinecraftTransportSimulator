@@ -1,15 +1,13 @@
 package mcinterface1165;
 
-import javax.annotation.Nonnull;
-
 import minecrafttransportsimulator.blocks.tileentities.components.ATileEntityBase;
 import minecrafttransportsimulator.blocks.tileentities.components.ITileEntityFluidTankProvider;
 import minecrafttransportsimulator.blocks.tileentities.instances.TileEntityFluidLoader;
 import minecrafttransportsimulator.entities.instances.EntityFluidTank;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityType;
-import net.minecraft.util.Direction;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.Direction;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.fluids.FluidStack;
@@ -18,6 +16,7 @@ import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
 import net.minecraftforge.fluids.capability.IFluidHandler;
 import net.minecraftforge.fml.RegistryObject;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Builder for tile entities that contain fluids.  This builder ticks.
@@ -25,7 +24,7 @@ import net.minecraftforge.registries.ForgeRegistries;
  * @author don_bruce
  */
 public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFluidTank, IFluidHandler {
-    protected static RegistryObject<TileEntityType<BuilderTileEntityFluidTank>> TE_TYPE2;
+    protected static RegistryObject<BlockEntityType<BuilderTileEntityFluidTank>> TE_TYPE2;
 
     private EntityFluidTank tank;
 
@@ -42,12 +41,12 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     @Override
     public void tick() {
         super.tick();
-        if (tank != null) {
-            if (tileEntity instanceof TileEntityFluidLoader && ((TileEntityFluidLoader) tileEntity).isUnloader()) {
+        if (this.tank != null) {
+            if (this.tileEntity instanceof TileEntityFluidLoader && ((TileEntityFluidLoader) this.tileEntity).isUnloader()) {
                 int currentFluidAmount = getFluidAmount();
                 if (currentFluidAmount > 0) {
                     //Pump out fluid to handler below, if we have one.
-                    TileEntity teBelow = level.getBlockEntity(getBlockPos().below());
+                    BlockEntity teBelow = this.world.getBlockEntity(this.getPos().down());
                     if (teBelow != null) {
                         IFluidHandler fluidHandler = teBelow.getCapability(CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY, Direction.UP).orElse(null);
                         if (fluidHandler != null) {
@@ -64,12 +63,12 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     }
 
     @Override
-    public FluidStack getFluid() {
-        if (tank != null && !tank.getFluid().isEmpty()) {
+    public @NotNull FluidStack getFluid() {
+        if (this.tank != null && !this.tank.getFluid().isEmpty()) {
             //Need to find the mod that registered this fluid, Forge is stupid and has them per-mod vs just all with a single name.
-            for (ResourceLocation fluidKey : ForgeRegistries.FLUIDS.getKeys()) {
-                if (fluidKey.getPath().equals(tank.getFluid())) {
-                    return new FluidStack(ForgeRegistries.FLUIDS.getValue(fluidKey), (int) tank.getFluidLevel());
+            for (Identifier fluidKey : ForgeRegistries.FLUIDS.getKeys()) {
+                if (fluidKey.getPath().equals(this.tank.getFluid())) {
+                    return new FluidStack(ForgeRegistries.FLUIDS.getValue(fluidKey), (int) this.tank.getFluidLevel());
                 }
             }
         }
@@ -97,7 +96,7 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     }
 
     @Override
-    public FluidStack getFluidInTank(int tank) {
+    public @NotNull FluidStack getFluidInTank(int tank) {
         return getFluid();
     }
 
@@ -107,7 +106,7 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     }
 
     @Override
-    public boolean isFluidValid(int tank, @Nonnull FluidStack stack) {
+    public boolean isFluidValid(int tank, @NotNull FluidStack stack) {
         return isFluidValid(stack);
     }
 
@@ -121,7 +120,7 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     }
 
     @Override
-    public FluidStack drain(int maxDrain, FluidAction doDrain) {
+    public @NotNull FluidStack drain(int maxDrain, FluidAction doDrain) {
         if (getFluidAmount() > 0) {
             return this.drain(new FluidStack(getFluid().getFluid(), maxDrain), doDrain);
         }
@@ -129,13 +128,13 @@ public class BuilderTileEntityFluidTank extends BuilderTileEntity implements IFl
     }
 
     @Override
-    public FluidStack drain(FluidStack stack, FluidAction doDrain) {
+    public @NotNull FluidStack drain(FluidStack stack, FluidAction doDrain) {
         return new FluidStack(stack.getFluid(), (int) (tank != null ? tank.drain(stack.getFluid().getRegistryName().getPath(), stack.getFluid().getRegistryName().getNamespace(), stack.getAmount(), doDrain == FluidAction.EXECUTE) : 0));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> capability, Direction facing) {
+    public <T> @NotNull LazyOptional<T> getCapability(@NotNull Capability<T> capability, Direction facing) {
         if (capability == CapabilityFluidHandler.FLUID_HANDLER_CAPABILITY && facing == Direction.DOWN) {
             return LazyOptional.of(() -> (T) this);
         } else {

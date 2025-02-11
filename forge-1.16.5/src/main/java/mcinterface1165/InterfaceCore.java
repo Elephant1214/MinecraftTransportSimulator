@@ -1,13 +1,5 @@
 package mcinterface1165;
 
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-
 import minecrafttransportsimulator.items.components.AItemBase;
 import minecrafttransportsimulator.mcinterface.IInterfaceCore;
 import minecrafttransportsimulator.mcinterface.IWrapperItemStack;
@@ -15,13 +7,16 @@ import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.tags.ITag;
-import net.minecraft.tags.ItemTags;
-import net.minecraft.util.ResourceLocation;
+import net.minecraft.tag.ItemTags;
+import net.minecraft.tag.Tag;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.registry.Registry;
 import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import java.io.InputStream;
+import java.util.*;
 
 class InterfaceCore implements IInterfaceCore {
     protected static final Map<String, List<BuilderItem>> taggedItems = new HashMap<>();
@@ -38,14 +33,14 @@ class InterfaceCore implements IInterfaceCore {
 
     @Override
     public boolean isFluidValid(String fluidID) {
-        return ForgeRegistries.FLUIDS.containsKey(new ResourceLocation(fluidID));
+        return ForgeRegistries.FLUIDS.containsKey(new Identifier(fluidID));
     }
 
     @Override
     public String getModName(String modID) {
         return ModList.get().getModContainerById(modID).get().getModInfo().getDisplayName();
     }
-    
+
     @Override
     public InputStream getPackResource(String resource) {
         int assetsIndexEnd = resource.indexOf("assets/") + "assets/".length();
@@ -82,8 +77,9 @@ class InterfaceCore implements IInterfaceCore {
     @SuppressWarnings("deprecation")
     @Override
     public IWrapperItemStack getStackForProperties(String name, int meta, int qty) {
-        Item item = Registry.ITEM.get(ResourceLocation.tryParse(name));
-        if (item != null) {
+        Identifier id = Identifier.tryParse(name);
+        if (id != null && id != Registry.ITEM.getDefaultId()) {
+            Item item = Registry.ITEM.get(id);
             return new WrapperItemStack(new ItemStack(item, qty));
         } else {
             return new WrapperItemStack(ItemStack.EMPTY.copy());
@@ -97,7 +93,7 @@ class InterfaceCore implements IInterfaceCore {
 
     @Override
     public boolean isOredictMatch(IWrapperItemStack stackA, IWrapperItemStack stackB) {
-        return ((WrapperItemStack) stackA).stack.sameItem(((WrapperItemStack) stackB).stack);
+        return ((WrapperItemStack) stackA).stack.isItemEqualIgnoreDamage(((WrapperItemStack) stackB).stack);
     }
 
     @Override
@@ -105,9 +101,9 @@ class InterfaceCore implements IInterfaceCore {
         //Convert to lowercase in case we are camelCase from oreDict systems.
         String lowerCaseOre = oreName.toLowerCase(Locale.ROOT);
         List<IWrapperItemStack> stacks = new ArrayList<>();
-        ITag<Item> tag = ItemTags.getAllTags().getTag(new ResourceLocation("minecraft", lowerCaseOre));
+        Tag<Item> tag = ItemTags.getTagGroup().getTag(new Identifier("minecraft", lowerCaseOre));
         if (tag == null) {
-            tag = ItemTags.getAllTags().getTag(new ResourceLocation("forge", lowerCaseOre));
+            tag = ItemTags.getTagGroup().getTag(new Identifier("forge", lowerCaseOre));
         }
         if (tag == null) {
             List<BuilderItem> items = taggedItems.get(lowerCaseOre);
@@ -115,7 +111,7 @@ class InterfaceCore implements IInterfaceCore {
                 items.forEach(item -> stacks.add(new WrapperItemStack(new ItemStack(item, stackSize))));
             }
         } else {
-            tag.getValues().forEach(item -> stacks.add(new WrapperItemStack(new ItemStack(item, stackSize))));
+            tag.values().forEach(item -> stacks.add(new WrapperItemStack(new ItemStack(item, stackSize))));
         }
 
         return stacks;

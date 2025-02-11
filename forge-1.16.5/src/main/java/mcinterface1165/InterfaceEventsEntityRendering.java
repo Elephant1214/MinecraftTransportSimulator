@@ -1,7 +1,5 @@
 package mcinterface1165;
 
-import org.lwjgl.glfw.GLFW;
-
 import mcinterface1165.mixin.client.RenderInfoInvokerMixin;
 import minecrafttransportsimulator.baseclasses.Point3D;
 import minecrafttransportsimulator.baseclasses.RotationMatrix;
@@ -14,13 +12,13 @@ import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import minecrafttransportsimulator.systems.CameraSystem;
 import minecrafttransportsimulator.systems.CameraSystem.CameraMode;
 import minecrafttransportsimulator.systems.ConfigSystem;
-import net.minecraft.client.MainWindow;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.ActiveRenderInfo;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Camera;
+import net.minecraft.client.util.Window;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.vector.Vector3d;
+import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityViewRenderEvent.CameraSetup;
 import net.minecraftforge.client.event.RenderArmEvent;
@@ -29,6 +27,7 @@ import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Interface for handling events pertaining to entity rendering.  This modifies the player's rendered state
@@ -61,9 +60,9 @@ public class InterfaceEventsEntityRendering {
      */
     @SubscribeEvent
     public static void onIVCameraSetup(CameraSetup event) {
-        ActiveRenderInfo info = event.getInfo();
-        if (info.getEntity() instanceof PlayerEntity) {
-            mcPlayer = (PlayerEntity) info.getEntity();
+        Camera info = event.getInfo();
+        if (info.getFocusedEntity() instanceof PlayerEntity) {
+            mcPlayer = (PlayerEntity) info.getFocusedEntity();
             IWrapperPlayer player = WrapperPlayer.getWrapperFor(mcPlayer);
             cameraAdjustedPosition.set(0, 0, 0);
             cameraAdjustedOrientation.setToZero();
@@ -87,7 +86,7 @@ public class InterfaceEventsEntityRendering {
                 //Move the info's setup to the set position of the camera.
                 //This will offset the player's eye position to match the camera.
                 //We do this in first-person mode since third-person adds zoom stuff.
-                ((RenderInfoInvokerMixin) info).invoke_setPosition(cameraAdjustedPosition.x, cameraAdjustedPosition.y, cameraAdjustedPosition.z);
+                ((RenderInfoInvokerMixin) info).invokeSetPos(cameraAdjustedPosition.x, cameraAdjustedPosition.y, cameraAdjustedPosition.z);
                 adjustedCamera = true;
             }
         }
@@ -119,15 +118,15 @@ public class InterfaceEventsEntityRendering {
         //This renders them over the main hotbar, but doesn't block the chat window.
         if (event.getType().equals(RenderGameOverlayEvent.ElementType.CHAT)) {
             //Set up variables.
-            MainWindow window = Minecraft.getInstance().getWindow();
+            Window window = MinecraftClient.getInstance().getWindow();
             long displaySize = InterfaceManager.clientInterface.getPackedDisplaySize();
             int screenWidth = (int) (displaySize >> Integer.SIZE);
             int screenHeight = (int) displaySize;
             double[] xPos = new double[1];
             double[] yPos = new double[1];
-            GLFW.glfwGetCursorPos(window.getWindow(), xPos, yPos);
-            int mouseX = (int) (xPos[0] * screenWidth / window.getScreenWidth());
-            int mouseY = (int) (yPos[0] * screenHeight / window.getScreenHeight());
+            GLFW.glfwGetCursorPos(window.getHandle(), xPos, yPos);
+            int mouseX = (int) (xPos[0] * screenWidth / window.getWidth());
+            int mouseY = (int) (yPos[0] * screenHeight / window.getHeight());
 
             float partialTicks = event.getPartialTicks();
             boolean updateGUIs = screenWidth != lastScreenWidth || screenHeight != lastScreenHeight;
@@ -150,7 +149,7 @@ public class InterfaceEventsEntityRendering {
         AEntityB_Existing ridingEntity = entityWrapper.getEntityRiding();
         //This may be null if MC sets this player as riding before the actual entity has time to load NBT.
         if (ridingEntity != null) {
-            event.getMatrixStack().pushPose();
+            event.getMatrixStack().push();
             //Get orientation and scale for entity.
             //Head is relative to the body.
             ridingEntity.getInterpolatedOrientation(riderBodyOrientation, event.getPartialRenderTick());
@@ -171,27 +170,27 @@ public class InterfaceEventsEntityRendering {
             //Set the entity's head yaw to the delta between their yaw and their angled yaw.
             //This needs to be relative as we're going to render relative to the body here, not the world.
             //Need to store these though, since they get used in other areas not during rendering and this will foul them.
-            riderStoredHeadRot = entity.yHeadRot;
-            riderStoredHeadRotO = entity.yHeadRotO;
-            lastRiderPitch = entity.xRot;
-            lastRiderPrevPitch = entity.xRotO;
-            entity.yHeadRot = (float) -ridingEntity.riderRelativeOrientation.convertToAngles().y;
-            entity.yHeadRotO = entity.yHeadRot;
-            entity.xRot = (float) ridingEntity.riderRelativeOrientation.angles.x;
-            entity.xRotO = entity.xRot;
+            riderStoredHeadRot = entity.headYaw;
+            riderStoredHeadRotO = entity.prevHeadYaw;
+            lastRiderPitch = entity.pitch;
+            lastRiderPrevPitch = entity.prevPitch;
+            entity.headYaw = (float) -ridingEntity.riderRelativeOrientation.convertToAngles().y;
+            entity.prevHeadYaw = entity.headYaw;
+            entity.pitch = (float) ridingEntity.riderRelativeOrientation.angles.x;
+            entity.prevPitch = entity.pitch;
 
             //Set the entity yaw offset to 0.  This forces their body to always face the front of the seat.
             //This isn't the entity's normal yaw, which is the direction they are facing.
-            entity.yBodyRot = 0;
-            entity.yBodyRotO = 0;
+            entity.bodyYaw = 0;
+            entity.prevBodyYaw = 0;
 
             //Translate the rider to the camera so it rotates on the proper coordinate system.
-            PlayerEntity cameraEntity = Minecraft.getInstance().player;
+            PlayerEntity cameraEntity = MinecraftClient.getInstance().player;
             if (cameraEntity != null) {
                 //Get delta between camera and rendered entity.
-                Vector3d cameraEntityPos = cameraEntity.position();
-                Vector3d entityPos = entity.position();
-                new Point3D(entity.xo - cameraEntity.xo + (entityPos.x - entity.xo - (cameraEntityPos.x - cameraEntity.xo)) * event.getPartialRenderTick(), entity.yo - cameraEntity.yo + (entityPos.y - entity.yo - (cameraEntityPos.y - cameraEntity.yo)) * event.getPartialRenderTick(), entity.zo - cameraEntity.zo + (entityPos.z - entity.zo - (cameraEntityPos.z - cameraEntity.zo)) * event.getPartialRenderTick());
+                Vec3d cameraEntityPos = cameraEntity.getPos();
+                Vec3d entityPos = entity.getPos();
+                new Point3D(entity.prevX - cameraEntity.prevX + (entityPos.x - entity.prevX - (cameraEntityPos.x - cameraEntity.prevX)) * event.getPartialRenderTick(), entity.prevY - cameraEntity.prevY + (entityPos.y - entity.prevY - (cameraEntityPos.y - cameraEntity.prevY)) * event.getPartialRenderTick(), entity.prevZ - cameraEntity.prevZ + (entityPos.z - entity.prevZ - (cameraEntityPos.z - cameraEntity.prevZ)) * event.getPartialRenderTick());
 
                 //Apply translations and rotations to move entity to correct position relative to the camera entity.
                 riderTotalTransformation.resetTransforms();
@@ -199,7 +198,7 @@ public class InterfaceEventsEntityRendering {
                 riderTotalTransformation.applyRotation(riderBodyOrientation);
                 riderTotalTransformation.applyScaling(entityScale);
                 riderTotalTransformation.applyTranslation(0, entityWrapper.getSeatOffset(), 0);
-                event.getMatrixStack().last().pose().multiply(InterfaceRender.convertMatrix4f(riderTotalTransformation));
+                event.getMatrixStack().peek().getModel().multiply(InterfaceRender.convertMatrix4f(riderTotalTransformation));
             }
 
             needToPopMatrix = true;
@@ -209,13 +208,13 @@ public class InterfaceEventsEntityRendering {
         if (entity instanceof PlayerEntity) {
             //Check if we are holding a gun.  This is the only other time
             //we apply player tweaks besides riding in a vehicle.
-            EntityPlayerGun gunEntity = EntityPlayerGun.playerClientGuns.get(entity.getUUID());
+            EntityPlayerGun gunEntity = EntityPlayerGun.playerClientGuns.get(entity.getUuid());
             if (gunEntity != null && gunEntity.activeGun != null) {
                 PlayerEntity player = (PlayerEntity) entity;
 
                 //Remove the held item from the enitty's hand
-                heldStackHolder = player.getMainHandItem();
-                player.inventory.setItem(player.inventory.selected, ItemStack.EMPTY);
+                heldStackHolder = player.getMainHandStack();
+                player.inventory.setStack(player.inventory.selectedSlot, ItemStack.EMPTY);
             }
         }
     }
@@ -226,17 +225,17 @@ public class InterfaceEventsEntityRendering {
     @SubscribeEvent
     public static void onIVRenderLivingPost(@SuppressWarnings("rawtypes") RenderLivingEvent.Post event) {
         if (needToPopMatrix) {
-            event.getMatrixStack().popPose();
+            event.getMatrixStack().pop();
             LivingEntity entity = event.getEntity();
-            entity.yHeadRot = riderStoredHeadRot;
-            entity.yHeadRotO = riderStoredHeadRotO;
-            entity.xRot = lastRiderPitch;
-            entity.xRotO = lastRiderPrevPitch;
+            entity.headYaw = riderStoredHeadRot;
+            entity.prevHeadYaw = riderStoredHeadRotO;
+            entity.pitch = lastRiderPitch;
+            entity.prevPitch = lastRiderPrevPitch;
             needToPopMatrix = false;
         }
         if (heldStackHolder != null) {
             PlayerEntity player = (PlayerEntity) event.getEntity();
-            player.inventory.setItem(player.inventory.selected, heldStackHolder);
+            player.inventory.setStack(player.inventory.selectedSlot, heldStackHolder);
             heldStackHolder = null;
         }
     }
@@ -247,7 +246,7 @@ public class InterfaceEventsEntityRendering {
      */
     @SubscribeEvent
     public static void onIVRenderHand(RenderHandEvent event) {
-        EntityPlayerGun entity = EntityPlayerGun.playerClientGuns.get(Minecraft.getInstance().player.getUUID());
+        EntityPlayerGun entity = EntityPlayerGun.playerClientGuns.get(MinecraftClient.getInstance().player.getUuid());
         if ((entity != null && entity.activeGun != null) || CameraSystem.activeCamera != null) {
             event.setCanceled(true);
         }
@@ -255,7 +254,7 @@ public class InterfaceEventsEntityRendering {
 
     @SubscribeEvent
     public static void onIVRenderArm(RenderArmEvent event) {
-        EntityPlayerGun entity = EntityPlayerGun.playerClientGuns.get(Minecraft.getInstance().player.getUUID());
+        EntityPlayerGun entity = EntityPlayerGun.playerClientGuns.get(MinecraftClient.getInstance().player.getUuid());
         if ((entity != null && entity.activeGun != null) || CameraSystem.activeCamera != null) {
             event.setCanceled(true);
         }

@@ -1,9 +1,5 @@
 package mcinterface1165;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
 import minecrafttransportsimulator.baseclasses.BoundingBox;
 import minecrafttransportsimulator.baseclasses.Damage;
 import minecrafttransportsimulator.baseclasses.Point3D;
@@ -18,23 +14,27 @@ import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.systems.ConfigSystem;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.MobEntity;
-import net.minecraft.entity.merchant.villager.VillagerEntity;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.EntityDamageSource;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.LeadItem;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.potion.EffectInstance;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.potion.Potion;
-import net.minecraft.util.DamageSource;
-import net.minecraft.util.EntityDamageSource;
-import net.minecraft.util.ResourceLocation;
-import net.minecraft.util.text.ITextComponent;
-import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 @EventBusSubscriber
 public class WrapperEntity implements IWrapperEntity {
@@ -54,7 +54,7 @@ public class WrapperEntity implements IWrapperEntity {
         if (entity instanceof PlayerEntity) {
             return WrapperPlayer.getWrapperFor((PlayerEntity) entity);
         } else if (entity != null) {
-            Map<Entity, WrapperEntity> entityWrappers = entity.level.isClientSide ? entityClientWrappers : entityServerWrappers;
+            Map<Entity, WrapperEntity> entityWrappers = entity.world.isClient ? entityClientWrappers : entityServerWrappers;
             WrapperEntity wrapper = entityWrappers.get(entity);
             if (wrapper == null || !wrapper.isValid() || entity != wrapper.entity) {
                 wrapper = new WrapperEntity(entity);
@@ -72,32 +72,32 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public boolean equals(Object obj) {
-        return entity.equals(obj instanceof WrapperEntity ? ((WrapperEntity) obj).entity : obj);
+        return this.entity.equals(obj instanceof WrapperEntity ? ((WrapperEntity) obj).entity : obj);
     }
 
     @Override
     public int hashCode() {
-        return entity.hashCode();
+        return this.entity.hashCode();
     }
 
     @Override
     public boolean isValid() {
-        return entity != null && entity.isAlive();
+        return this.entity != null && this.entity.isAlive();
     }
 
     @Override
     public UUID getID() {
-        return entity.getUUID();
+        return this.entity.getUuid();
     }
 
     @Override
     public String getName() {
-        return entity.getName().getString();
+        return this.entity.getName().getString();
     }
 
     @Override
     public AWrapperWorld getWorld() {
-        return WrapperWorld.getWrapperFor(entity.level);
+        return WrapperWorld.getWrapperFor(this.entity.world);
     }
 
     @Override
@@ -125,13 +125,13 @@ public class WrapperEntity implements IWrapperEntity {
             AEntityB_Existing entityRiding = getEntityRiding();
             if (entityRiding == null) {
                 //Only spawn and start riding on the server, clients will get packets.
-                if (!entity.level.isClientSide) {
+                if (!this.entity.world.isClient) {
                     BuilderEntityLinkedSeat seat = new BuilderEntityLinkedSeat(BuilderEntityLinkedSeat.E_TYPE3.get(), ((WrapperWorld) entityToRide.world).world);
                     seat.loadedFromSavedNBT = true;
                     seat.setPos(entityToRide.position.x, entityToRide.position.y, entityToRide.position.z);
                     seat.entity = entityToRide;
-                    entity.level.addFreshEntity(seat);
-                    entity.startRiding(seat, true);
+                    this.entity.world.spawnEntity(seat);
+                    this.entity.startRiding(seat, true);
                 }
             } else {
                 //Just change entity reference, we will already be a rider on the entity at this point.
@@ -149,18 +149,16 @@ public class WrapperEntity implements IWrapperEntity {
         AEntityB_Existing riding = getEntityRiding();
         if (riding instanceof PartSeat) {
             PartSeat seat = (PartSeat) riding;
-            if (seat != null) {
-                if (seat.placementDefinition.playerScale != null) {
-                    if (seat.definition.seat.playerScale != null) {
-                        return seat.scale.y * seat.placementDefinition.playerScale.y * seat.definition.seat.playerScale.y;
-                    } else {
-                        return seat.scale.y * seat.placementDefinition.playerScale.y;
-                    }
-                } else if (seat.definition.seat.playerScale != null) {
-                    return seat.scale.y * seat.definition.seat.playerScale.y;
+            if (seat.placementDefinition.playerScale != null) {
+                if (seat.definition.seat.playerScale != null) {
+                    return seat.scale.y * seat.placementDefinition.playerScale.y * seat.definition.seat.playerScale.y;
                 } else {
-                    return seat.scale.y;
+                    return seat.scale.y * seat.placementDefinition.playerScale.y;
                 }
+            } else if (seat.definition.seat.playerScale != null) {
+                return seat.scale.y * seat.definition.seat.playerScale.y;
+            } else {
+                return seat.scale.y;
             }
         }
         return 1.0;
@@ -172,19 +170,19 @@ public class WrapperEntity implements IWrapperEntity {
         //We account for this here.
         AEntityB_Existing riding = getEntityRiding();
         if (riding instanceof PartSeat && !((PartSeat) riding).definition.seat.standing) {
-            if (entity instanceof AnimalEntity) {
+            if (this.entity instanceof AnimalEntity) {
                 //Animals are moved up 0.14 pixels (~2.25), for their sitting positions.  Un-do this.
-                return entity.getMyRidingOffset() - 0.14D;
-            } else if (entity instanceof VillagerEntity) {
+                return this.entity.getHeightOffset() - 0.14D;
+            } else if (this.entity instanceof VillagerEntity) {
                 //Villagers get the same offset as players.
                 return (-12D / 16D) * (30D / 32D);
             } else {
-                ResourceLocation registration = entity.getType().getRegistryName();
+                Identifier registration = this.entity.getType().getRegistryName();
                 if (registration != null && registration.getNamespace().equals("customnpcs")) {
                     //CNPCs seem to be offset by 3, but invert their model scaling for their sitting position.
                     return -3D / 16D * (32D / 30D);
                 } else {
-                    return entity.getMyRidingOffset();
+                    return this.entity.getHeightOffset();
                 }
             }
         }
@@ -193,13 +191,13 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public double getEyeHeight() {
-        return entity.getEyeHeight();
+        return this.entity.getStandingEyeHeight();
     }
 
     @Override
     public Point3D getPosition() {
-        mutablePosition.set(entity.getX(), entity.getY(), entity.getZ());
-        return mutablePosition;
+        this.mutablePosition.set(this.entity.getX(), this.entity.getY(), this.entity.getZ());
+        return this.mutablePosition;
     }
 
     private final Point3D mutablePosition = new Point3D();
@@ -218,46 +216,46 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public void setPosition(Point3D position, boolean onGround) {
-        if (cachedEntityRiding != null) {
+        if (this.cachedEntityRiding != null) {
             //Need to offset down to make bounding hitbox go down like normal. 
-            entity.setPos(position.x, position.y + getSeatOffset(), position.z);
+            this.entity.setPos(position.x, position.y + getSeatOffset(), position.z);
         } else {
-            entity.setPos(position.x, position.y, position.z);
+            this.entity.setPos(position.x, position.y, position.z);
         }
         //Set fallDistance to 0 to prevent damage.
-        entity.fallDistance = 0;
-        entity.setOnGround(onGround);
+        this.entity.fallDistance = 0;
+        this.entity.setOnGround(onGround);
     }
 
     @Override
     public void applyMotion(Point3D motion) {
-        entity.push(motion.x, motion.y, motion.z);
-        entity.hurtMarked = true;
+        this.entity.addVelocity(motion.x, motion.y, motion.z);
+        this.entity.velocityModified = true;
     }
 
     @Override
     public Point3D getVelocity() {
         //Need to manually put 0 here for Y since entities on ground have a constant -Y motion.
-        mutableVelocity.set(entity.getDeltaMovement().x, entity.isOnGround() ? 0 : entity.getDeltaMovement().y, entity.getDeltaMovement().z);
-        return mutableVelocity;
+        this.mutableVelocity.set(this.entity.getVelocity().x, this.entity.isOnGround() ? 0 : this.entity.getVelocity().y, this.entity.getVelocity().z);
+        return this.mutableVelocity;
     }
 
     private final Point3D mutableVelocity = new Point3D();
 
     @Override
     public void setVelocity(Point3D motion) {
-        entity.setDeltaMovement(motion.x, motion.y, motion.z);
+        this.entity.setVelocity(motion.x, motion.y, motion.z);
     }
 
     @Override
     public RotationMatrix getOrientation() {
-        if (lastPitchChecked != entity.xRot || lastYawChecked != entity.yRot) {
-            lastPitchChecked = entity.xRot;
-            lastYawChecked = entity.yRot;
-            mutableOrientation.angles.set(entity.xRot, -entity.yRot, 0);
-            mutableOrientation.setToAngles(mutableOrientation.angles);
+        if (this.lastPitchChecked != this.entity.pitch || this.lastYawChecked != this.entity.yaw) {
+            this.lastPitchChecked = this.entity.pitch;
+            this.lastYawChecked = this.entity.yaw;
+            this.mutableOrientation.angles.set(this.entity.pitch, -this.entity.yaw, 0);
+            this.mutableOrientation.setToAngles(this.mutableOrientation.angles);
         }
-        return mutableOrientation;
+        return this.mutableOrientation;
     }
 
     private final RotationMatrix mutableOrientation = new RotationMatrix();
@@ -267,33 +265,33 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public void setOrientation(RotationMatrix rotation) {
-        if (entity.level.isClientSide) {
+        if (this.entity.world.isClient) {
             //Client-side expects the yaw keep going and not reset at the 360 bounds like our matrix does.
             //Therefore, we need to check our delta from our rotation matrix and apply that VS the raw value.
             //Clamp delta to +/- 180 to ensure that we don't go 360 backwards when crossing the 0/360 zone.
-            float yawDelta = ((float) -rotation.angles.y - lastYawApplied) % 360;
+            float yawDelta = ((float) -rotation.angles.y - this.lastYawApplied) % 360;
             if (yawDelta > 180) {
                 yawDelta -= 360;
             } else if (yawDelta < -180) {
                 yawDelta -= 360;
             }
-            entity.yRot = lastYawApplied + yawDelta;
-            lastYawApplied = entity.yRot;
+            this.entity.yaw = this.lastYawApplied + yawDelta;
+            this.lastYawApplied = this.entity.yaw;
         } else {
-            entity.yRot = (float) -rotation.angles.y;
+            this.entity.yaw = (float) -rotation.angles.y;
         }
-        entity.xRot = (float) rotation.angles.x;
+        this.entity.pitch = (float) rotation.angles.x;
     }
 
     @Override
     public float getPitch() {
-        return entity.xRot;
+        return this.entity.pitch;
     }
 
     @Override
     public float getPitchDelta() {
-        float value = entity.xRot - lastPitch;
-        lastPitch = entity.xRot;
+        float value = this.entity.pitch - this.lastPitch;
+        this.lastPitch = this.entity.pitch;
         return value;
     }
 
@@ -301,13 +299,13 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public float getYaw() {
-        return -entity.yRot;
+        return -this.entity.yaw;
     }
 
     @Override
     public float getYawDelta() {
-        float value = entity.yRot - lastYaw;
-        lastYaw = entity.yRot;
+        float value = this.entity.yaw - this.lastYaw;
+        this.lastYaw = this.entity.yaw;
         return -value;
     }
 
@@ -315,7 +313,7 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public float getBodyYaw() {
-        return entity instanceof LivingEntity ? -((LivingEntity) entity).yBodyRot : 0;
+        return this.entity instanceof LivingEntity ? -((LivingEntity) this.entity).bodyYaw : 0;
     }
 
     @Override
@@ -328,27 +326,27 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public void setYaw(double yaw) {
-        entity.yRot = (float) -yaw;
+        this.entity.yaw = (float) -yaw;
     }
 
     @Override
     public void setBodyYaw(double yaw) {
-        if (entity instanceof LivingEntity) {
-            entity.setYBodyRot((float) -yaw);
+        if (this.entity instanceof LivingEntity) {
+            this.entity.setBodyYaw((float) -yaw);
         }
     }
 
     @Override
     public void setPitch(double pitch) {
-        entity.xRot = (float) pitch;
+        this.entity.pitch = (float) pitch;
     }
 
     @Override
     public BoundingBox getBounds() {
-        mutableBounds.widthRadius = entity.getBbWidth() / 2F;
-        mutableBounds.heightRadius = entity.getBbHeight() / 2F;
-        mutableBounds.depthRadius = entity.getBbWidth() / 2F;
-        mutableBounds.globalCenter.set(entity.getX(), entity.getY() + mutableBounds.heightRadius, entity.getZ());
+        this.mutableBounds.widthRadius = this.entity.getWidth() / 2F;
+        this.mutableBounds.heightRadius = this.entity.getHeight() / 2F;
+        this.mutableBounds.depthRadius = this.entity.getWidth() / 2F;
+        this.mutableBounds.globalCenter.set(this.entity.getX(), this.entity.getY() + this.mutableBounds.heightRadius, this.entity.getZ());
         return mutableBounds;
     }
 
@@ -356,25 +354,25 @@ public class WrapperEntity implements IWrapperEntity {
 
     @Override
     public IWrapperNBT getData() {
-        CompoundNBT tag = new CompoundNBT();
-        entity.save(tag);
+        NbtCompound tag = new NbtCompound();
+        this.entity.writeNbt(tag);
         return new WrapperNBT(tag);
     }
 
     @Override
     public void setData(IWrapperNBT data) {
-        entity.load(((WrapperNBT) data).tag);
+        this.entity.readNbt(((WrapperNBT) data).tag);
     }
 
     @Override
     public boolean leashTo(IWrapperPlayer player) {
         PlayerEntity mcPlayer = ((WrapperPlayer) player).player;
-        if (entity instanceof MobEntity) {
-            ItemStack heldStack = mcPlayer.getMainHandItem();
-            if (((MobEntity) entity).canBeLeashed(mcPlayer) && heldStack.getItem() instanceof LeadItem) {
-                ((MobEntity) entity).setLeashedTo(mcPlayer, true);
+        if (this.entity instanceof MobEntity) {
+            ItemStack heldStack = mcPlayer.getMainHandStack();
+            if (((MobEntity) this.entity).canBeLeashedBy(mcPlayer) && heldStack.getItem() instanceof LeadItem) {
+                ((MobEntity) this.entity).attachLeash(mcPlayer, true);
                 if (!mcPlayer.isCreative()) {
-                    heldStack.shrink(1);
+                    heldStack.decrement(1);
                 }
                 return true;
             }
@@ -389,53 +387,51 @@ public class WrapperEntity implements IWrapperEntity {
         }
         DamageSource newSource = new EntityDamageSource(damage.language.getCurrentValue(), damage.entityResponsible != null ? ((WrapperEntity) damage.entityResponsible).entity : null) {
             @Override
-            public ITextComponent getLocalizedDeathMessage(LivingEntity player) {
+            public Text getDeathMessage(LivingEntity player) {
                 if (damage.entityResponsible != null) {
-                    return new StringTextComponent(String.format(damage.language.getCurrentValue(), player.getDisplayName().getString(), ((WrapperEntity) damage.entityResponsible).entity.getDisplayName().getString()));
+                    return new LiteralText(String.format(damage.language.getCurrentValue(), player.getDisplayName().getString(), ((WrapperEntity) damage.entityResponsible).entity.getDisplayName().getString()));
                 } else {
-                    return new StringTextComponent(String.format(damage.language.getCurrentValue(), player.getDisplayName().getString()));
+                    return new LiteralText(String.format(damage.language.getCurrentValue(), player.getDisplayName().getString()));
                 }
             }
         };
         if (damage.isFire) {
-            newSource.setIsFire();
-            entity.setRemainingFireTicks(5);
+            newSource.setFire();
+            this.entity.setFireTicks(5);
         }
         if (damage.knockback != null) {
             applyMotion(damage.knockback);
         }
         if (damage.isWater) {
-            entity.clearFire();
+            this.entity.extinguish();
             //Don't attack this entity with water.
             return;
         }
         if (damage.isExplosion) {
-            newSource.setExplosion();
+            newSource.setExplosive();
         }
         if (damage.ignoreArmor) {
-            newSource.bypassArmor();
+            newSource.setBypassesArmor();
         }
-        if (damage.ignoreCooldown && entity instanceof LivingEntity) {
-            entity.invulnerableTime = 0;
+        if (damage.ignoreCooldown && this.entity instanceof LivingEntity) {
+            this.entity.timeUntilRegen = 0;
         }
         if (ConfigSystem.settings.damage.creativePlayerDamage.value) {
-            newSource.bypassInvul();
+            newSource.setOutOfWorld();
         }
-        entity.hurt(newSource, (float) damage.amount);
+        this.entity.damage(newSource, (float) damage.amount);
 
         if (damage.effects != null) {
-            damage.effects.forEach(effect -> addPotionEffect(effect));
+            damage.effects.forEach(this::addPotionEffect);
         }
     }
 
     @Override
     public void addPotionEffect(JSONPotionEffect effect) {
-        if ((entity instanceof LivingEntity)) {
-            Potion potion = Potion.byName(effect.name);
+        if ((this.entity instanceof LivingEntity)) {
+            Potion potion = Potion.byId(effect.name);
             if (potion != null) {
-                potion.getEffects().forEach(mcEffect -> {
-                    ((LivingEntity) entity).addEffect(new EffectInstance(mcEffect.getEffect(), effect.duration, effect.amplifier, false, false));
-                });
+                potion.getEffects().forEach(mcEffect -> ((LivingEntity) this.entity).addStatusEffect(new StatusEffectInstance(mcEffect.getEffectType(), effect.duration, effect.amplifier, false, false)));
             } else {
                 throw new NullPointerException("Potion " + effect.name + " does not exist.");
             }
@@ -445,11 +441,9 @@ public class WrapperEntity implements IWrapperEntity {
     @Override
     public void removePotionEffect(JSONPotionEffect effect) {
         if ((entity instanceof LivingEntity)) {
-            Potion potion = Potion.byName(effect.name);
+            Potion potion = Potion.byId(effect.name);
             if (potion != null) {
-                potion.getEffects().forEach(mcEffect -> {
-                    ((LivingEntity) entity).removeEffect(mcEffect.getEffect());
-                });
+                potion.getEffects().forEach(mcEffect -> ((LivingEntity) entity).removeStatusEffect(mcEffect.getEffectType()));
             } else {
                 throw new NullPointerException("Potion " + effect.name + " does not exist.");
             }
@@ -461,10 +455,10 @@ public class WrapperEntity implements IWrapperEntity {
      */
     @SubscribeEvent
     public static void onIVWorldUnload(WorldEvent.Unload event) {
-        if (event.getWorld().isClientSide()) {
-            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.level);
+        if (event.getWorld().isClient()) {
+            entityClientWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         } else {
-            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.level);
+            entityServerWrappers.keySet().removeIf(entity1 -> event.getWorld() == entity1.world);
         }
     }
 }

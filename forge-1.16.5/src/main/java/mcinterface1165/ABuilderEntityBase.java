@@ -1,19 +1,19 @@
 package mcinterface1165;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import minecrafttransportsimulator.mcinterface.IWrapperNBT;
 import minecrafttransportsimulator.mcinterface.IWrapperPlayer;
 import minecrafttransportsimulator.mcinterface.InterfaceManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
-import net.minecraft.nbt.CompoundNBT;
-import net.minecraft.network.IPacket;
-import net.minecraft.network.play.server.SSpawnObjectPacket;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.Packet;
+import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.world.World;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Builder for a basic MC Entity class.  This builder provides basic entity logic that's common
@@ -36,7 +36,7 @@ public abstract class ABuilderEntityBase extends Entity {
      * to do their funky logic.  I'm looking at YOU The One Probe!  This should be either set by NBT loaded from disk
      * on servers, or set by packet on clients.
      */
-    public CompoundNBT lastLoadedNBT;
+    public NbtCompound lastLoadedNBT;
     /**
      * Set to true when NBT is loaded on servers from disk, or when NBT arrives from clients on servers.  This is set on the update loop when data is
      * detected from server NBT loading, but for clients this is set when a data packet arrives.  This prevents loading client-based NBT before
@@ -60,12 +60,12 @@ public abstract class ABuilderEntityBase extends Entity {
      **/
     public int idleTickCounter;
 
-    public ABuilderEntityBase(World level) {
-        super(E_TYPE, level);
+    public ABuilderEntityBase(World world) {
+        super(E_TYPE, world);
     }
 
-    public ABuilderEntityBase(EntityType<?> etype, World level) {
-        super(etype, level);
+    public ABuilderEntityBase(EntityType<?> entityType, World world) {
+        super(entityType, world);
     }
 
     @Override
@@ -73,7 +73,7 @@ public abstract class ABuilderEntityBase extends Entity {
         //Don't call the super, because some mods muck with our logic here.
         //Said mods are Sponge plugins, but I'm sure there are others.
         //super.onUpdate();
-        idleTickCounter = 0;
+        this.idleTickCounter = 0;
         baseTick();
     }
 
@@ -83,36 +83,38 @@ public abstract class ABuilderEntityBase extends Entity {
         //Said mods are Sponge plugins, but I'm sure there are others.
         //super.onEntityUpdate();
 
-        if (level.isClientSide) {
+        if (this.world.isClient) {
             //No data.  Wait for NBT to be loaded.
             //As we are on a client we need to send a packet to the server to request NBT data.
             ///Although we could call this in the constructor, some mods will create random
             //entities on the client.  By waiting for an update, we will know we're valid.
             //I'm looking at YOU: The One Probe!
-            if (needDataFromServer) {
+            if (this.needDataFromServer) {
                 InterfaceManager.packetInterface.sendToServer(new PacketEntityCSHandshakeClient(InterfaceManager.clientInterface.getClientPlayer(), this));
-                needDataFromServer = false;
+                this.needDataFromServer = false;
             }
-        } else if (loadedFromSavedNBT) {
+        } else if (this.loadedFromSavedNBT) {
             //Send any packets to clients that requested them.
-            if (!playersRequestingData.isEmpty()) {
-                for (IWrapperPlayer player : playersRequestingData) {
-                    IWrapperNBT data = InterfaceManager.coreInterface.getNewNBTWrapper();
-                    saveWithoutId(((WrapperNBT) data).tag);
+            if (!this.playersRequestingData.isEmpty()) {
+                IWrapperNBT data = InterfaceManager.coreInterface.getNewNBTWrapper();
+                writeNbt(((WrapperNBT) data).tag);
+                
+                for (IWrapperPlayer player : this.playersRequestingData) {
                     player.sendPacket(new PacketEntityCSHandshakeServer(this, data));
                 }
-                playersRequestingData.clear();
+                
+                this.playersRequestingData.clear();
             }
         }
 
         //If we are on the server, set the NBT flag.
-        if (!loadedFromSavedNBT && lastLoadedNBT != null && !level.isClientSide) {
-            loadFromSavedNBT = true;
+        if (!this.loadedFromSavedNBT && this.lastLoadedNBT != null && !this.world.isClient) {
+            this.loadFromSavedNBT = true;
         }
     }
 
     @Override
-    public void absMoveTo(double pX, double pY, double pZ, float pYRot, float pXRot) {
+    public void updatePositionAndAngles(double x, double y, double z, float yaw, float pitch) {
         //Overridden due to stupid tracker behavior.
     }
 
@@ -126,46 +128,46 @@ public abstract class ABuilderEntityBase extends Entity {
     }
 
     @Override
-    public boolean shouldRenderAtSqrDistance(double pDistance) {
+    public boolean shouldRender(double distance) {
         //Don't render entities, this gets done by the overrider.
         return false;
     }
 
     @Override
-    public void load(CompoundNBT tag) {
-        super.load(tag);
+    public void readNbt(NbtCompound tag) {
+        super.readNbt(tag);
         //Save the NBT for loading in the next update call.
-        lastLoadedNBT = tag;
+        this.lastLoadedNBT = tag;
     }
 
     @Override
-    public CompoundNBT saveWithoutId(CompoundNBT tag) {
-        super.saveWithoutId(tag);
+    public NbtCompound writeNbt(NbtCompound tag) {
+        super.writeNbt(tag);
         //Need to have this here as some mods will load us from NBT and then save us back
         //without ticking.  This causes data loss if we don't merge the last loaded NBT tag.
         //If we did tick, then the last loaded will be null and this doesn't apply.
-        if (lastLoadedNBT != null) {
-            tag.merge(lastLoadedNBT);
+        if (this.lastLoadedNBT != null) {
+            tag.copyFrom(this.lastLoadedNBT);
         }
         return tag;
     }
 
     //Junk methods.
     @Override
-    protected void addAdditionalSaveData(CompoundNBT pCompound) {
+    protected void writeCustomDataToNbt(NbtCompound nbt) {
     }
 
     @Override
-    protected void readAdditionalSaveData(CompoundNBT pCompound) {
+    protected void readCustomDataFromNbt(NbtCompound nbt) {
     }
 
     @Override
-    protected void defineSynchedData() {
+    protected void initDataTracker() {
     }
 
     @Override
-    public IPacket<?> getAddEntityPacket() {
+    public Packet<?> createSpawnPacket() {
         //Spawn object, we have a mixin override this code on the client though since it doesn't know to handle us.
-        return new SSpawnObjectPacket(this);
+        return new EntitySpawnS2CPacket(this);
     }
 }
