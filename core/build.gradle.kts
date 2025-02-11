@@ -12,17 +12,23 @@ dependencies {
 }
 
 tasks {
+    // This mess is what automatically updates the mod version in MtsVersion.java
     compileJava {
+        // Take the main source directory, find MtsVersion
         val versionFile = project.sourceSets.main.get().java.srcDirs.first()
             .walk()
             .filter {
                 it.nameWithoutExtension == "MtsVersion"
             }.first()
+        
+        // Read the file and setup Regex for the field
         val content = versionFile.readText()
         val target = Regex("""public static final String VERSION = "(.*?)";""")
 
+        // Find a match for the Regex, includes the version that is currently listed
         val match = target.find(content)!!
 
+        // If the version is incorrect, fix it and write the updated file contents
         if (match.groupValues[1] != rootProject.version) {
             val updatedContent = content.replace(
                 target,
@@ -34,6 +40,7 @@ tasks {
         }
     }
     jar {
+        // Includes the dependencies marked with `embed` in the final jar.
         doFirst {
             from(embed.files.map { zipTree(it) })
         }
